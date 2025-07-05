@@ -31,6 +31,12 @@ export function Header() {
                 </Link>
                 <nav className="hidden items-center gap-8 text-base md:flex">
                     <Link
+                        href="/dashboard"
+                        className="relative transition-colors hover:text-accent after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-0 after:bg-accent after:transition-all after:duration-300 hover:after:w-full"
+                    >
+                        Dashboard
+                    </Link>
+                    <Link
                         href="/strategy"
                         className="relative transition-colors hover:text-accent after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-0 after:bg-accent after:transition-all after:duration-300 hover:after:w-full"
                     >
