@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { Target } from "lucide-react"
 import Image from "next/image"
+import Link from "next/link"
 
 export function HeroSection() {
     return (
@@ -22,13 +23,15 @@ export function HeroSection() {
                             </p>
                         </div>
                         <div>
-                            <Button
-                                size="lg"
-                                className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold text-lg px-8 py-6 rounded-none border-4 border-black transition-all duration-200 hover:translate-x-2 hover:translate-y-2 active:translate-x-0 active:translate-y-0"
-                            >
-                                <Target className="w-5 h-5 mr-2" />
-                                Create My First Strategy
-                            </Button>
+                            <Link href="/strategy/new">
+                                <Button
+                                    size="lg"
+                                    className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold text-lg px-8 py-6 rounded-none border-4 border-black transition-all duration-200 hover:translate-x-2 hover:translate-y-2 active:translate-x-0 active:translate-y-0"
+                                >
+                                    <Target className="w-5 h-5 mr-2" />
+                                    Create My First Strategy
+                                </Button>
+                            </Link>
                         </div>
                     </div>
                     <div className="relative flex justify-center items-center">

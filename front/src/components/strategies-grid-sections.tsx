@@ -1,6 +1,7 @@
 import { StrategyCard } from "@/components/strategy-card"
 import { Button } from "@/components/ui/button"
 import { Target, TrendingUp, TrendingDown, Zap, Bot, Shield, Plus } from "lucide-react"
+import Link from "next/link"
 
 const strategies = [
     {
@@ -92,13 +93,15 @@ export function StrategiesGridSection() {
                     <p className="mt-4 text-lg text-muted-foreground mb-8">
                         Each strategy is locked, loaded, and ready to fire when conditions are met.
                     </p>
-                    <Button
-                        size="lg"
-                        className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold text-lg px-8 py-6 rounded-none border-4 border-black transition-all duration-200 hover:translate-x-2 hover:translate-y-2 active:translate-x-0 active:translate-y-0"
-                    >
-                        <Plus className="w-5 h-5 mr-2" />
-                        Create New Strategy
-                    </Button>
+                    <Link href="/strategy/new">
+                        <Button
+                            size="lg"
+                            className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold text-lg px-8 py-6 rounded-none border-4 border-black transition-all duration-200 hover:translate-x-2 hover:translate-y-2 active:translate-x-0 active:translate-y-0"
+                        >
+                            <Plus className="w-5 h-5 mr-2" />
+                            Create New Strategy
+                        </Button>
+                    </Link>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">

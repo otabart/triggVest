@@ -1,6 +1,6 @@
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { StrategiesGridSection } from "@/components/strategies-grid-section"
+import { StrategiesGridSection } from "@/components/strategies-grid-sections"
 
 export default function StrategyPage() {
     return (
