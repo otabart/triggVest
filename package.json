@@ -1,0 +1,58 @@
+{
+  "name": "triggvest",
+  "version": "1.0.0",
+  "description": "Plateforme d'automatisation d'investissement réactif - ETHGlobal Cannes 2025",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:router\" \"npm run dev:circle\"",
+    "dev:trigger": "cd apps/trigger-api && npm run cli",
+    "dev:router": "cd apps/strategy-router-api && npm run dev",
+    "dev:circle": "cd apps/circle-executor-api && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "cli": "cd apps/trigger-api && npm run cli",
+    "build": "npm run build:trigger && npm run build:router && npm run build:circle && npm run build:frontend",
+    "build:trigger": "cd apps/trigger-api && npm run build",
+    "build:router": "cd apps/strategy-router-api && npm run build",
+    "build:circle": "cd apps/circle-executor-api && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "install:all": "npm install && cd apps/trigger-api && npm install && cd ../strategy-router-api && npm install && cd ../circle-executor-api && npm install && cd ../../scripts && npm install && cd ../frontend && npm install",
+    "test": "node scripts/test-full-flow.js",
+    "test:api": "powershell -ExecutionPolicy Bypass -File scripts/test-api-routes.ps1",
+    "test:routes": "scripts/run-tests.bat",
+    "test:wallets": "node scripts/test-wallet-creation.js",
+    "clean": "npm run clean:trigger && npm run clean:router && npm run clean:circle",
+    "clean:trigger": "cd apps/trigger-api && npm run clean",
+    "clean:router": "cd apps/strategy-router-api && npm run clean",
+    "clean:circle": "cd apps/circle-executor-api && npm run clean",
+    "db:setup": "npx prisma generate && npx prisma db push",
+    "db:migrate": "npx prisma migrate dev",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:studio": "npx prisma studio",
+    "db:reset": "npx prisma migrate reset",
+    "db:deploy": "npx prisma migrate deploy",
+    "start": "npm run start:all",
+    "start:all": "concurrently \"npm run start:trigger\" \"npm run start:strategy\" \"npm run start:circle\"",
+    "start:trigger": "cd apps/trigger-api && npm run dev",
+    "start:strategy": "cd apps/strategy-router-api && npm run dev",
+    "start:circle": "cd apps/circle-executor-api && npm run dev",
+    "start:frontend": "cd frontend && npm start",
+    "demo": "powershell -ExecutionPolicy Bypass -File scripts/demo-complete.ps1"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "prisma": "^5.7.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.7.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "frontend",
+    "scripts"
+  ],
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  }
+} 
