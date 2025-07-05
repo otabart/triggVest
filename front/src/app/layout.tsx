@@ -4,6 +4,8 @@ import { Inter, Luckiest_Guy } from "next/font/google"
 import "./globals.css"
 import { cn } from "@/lib/utils"
 import { SmoothCursor } from "@/components/ui/smooth-cursor"
+import { headers } from 'next/headers'
+import ContextProvider from '@/context'
 
 const inter = Inter({
   subsets: ["latin"],
@@ -23,16 +25,20 @@ export const metadata: Metadata = {
   description: "You set the rules. We pull the trigger.",
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+
+  const headersObj = await headers();
+  const cookies = headersObj.get('cookie')
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={cn("font-sans", inter.variable, luckiestGuy.variable)}>
         <SmoothCursor />
-        {children}
+        <ContextProvider cookies={cookies}>{children}</ContextProvider>
       </body>
     </html>
   )
