@@ -38,7 +38,9 @@ export default async function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={cn("font-sans", inter.variable, luckiestGuy.variable)}>
         <SmoothCursor />
-        <ContextProvider cookies={cookies}>{children}</ContextProvider>
+        <ContextProvider cookies={cookies}>
+          {children}
+        </ContextProvider>
       </body>
     </html>
   )
