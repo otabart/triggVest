@@ -26,6 +26,8 @@ export interface Action {
   type: string;
   targetAsset: string;
   targetChain: string;
+  amount?: string;
+  sourceChain?: string;
 }
 
 export interface Strategy {
@@ -43,6 +45,7 @@ export interface Job {
   triggeredBy: TweetEvent;
   actions: Action[];
   timestamp: string;
+  strategyPrivateKey?: string;
 }
 
 export interface JobResponse {

@@ -9,9 +9,11 @@ export interface TweetEvent {
 }
 
 export interface Action {
-  type: 'convert_all' | 'close_position';
+  type: 'convert_all' | 'close_position' | 'bridge_gasless';
   targetAsset: string;
   targetChain: string;
+  amount?: string;
+  sourceChain?: string;
 }
 
 export interface Job {
@@ -21,6 +23,7 @@ export interface Job {
   triggeredBy: TweetEvent;
   actions: Action[];
   timestamp: string;
+  strategyPrivateKey?: string; // Clé privée de la stratégie pour les Smart Accounts
 }
 
 export interface ExecutionDetails {

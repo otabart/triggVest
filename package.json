@@ -20,6 +20,8 @@
     "test:api": "powershell -ExecutionPolicy Bypass -File scripts/test-api-routes.ps1",
     "test:routes": "scripts/run-tests.bat",
     "test:wallets": "node scripts/test-wallet-creation.js",
+    "test:gasless-bridge": "node scripts/test-gasless-bridge.js",
+    "test:insufficient-balance": "node scripts/test-insufficient-balance.js",
     "clean": "npm run clean:trigger && npm run clean:router && npm run clean:circle",
     "clean:trigger": "cd apps/trigger-api && npm run clean",
     "clean:router": "cd apps/strategy-router-api && npm run clean",
@@ -45,7 +47,9 @@
     "typescript": "^5.3.0"
   },
   "dependencies": {
-    "@prisma/client": "^5.7.0"
+    "@prisma/client": "^5.7.0",
+          "viem": "^2.23.5",
+    "@circle-fin/modular-wallets-core": "^1.0.9"
   },
   "workspaces": [
     "apps/*",

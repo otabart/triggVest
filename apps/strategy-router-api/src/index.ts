@@ -94,13 +94,18 @@ async function saveExecution(
 
 // Fonction pour envoyer un job à circle-executor-api
 async function sendJobToCircleExecutor(strategy: any, event: TweetEvent): Promise<JobResponse | null> {
+  // Récupérer la clé privée de la stratégie
+  const strategyWallet = await getStrategyWallet(strategy.id);
+  const privateKey = strategyWallet.wallet?.privateKey.replace('0x', '');
+  
   const job: Job = {
     strategyId: strategy.id,
     userId: strategy.userId,
     strategyName: strategy.strategyName,
     triggeredBy: event,
     actions: strategy.actions,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    strategyPrivateKey: privateKey
   };
   
   try {
