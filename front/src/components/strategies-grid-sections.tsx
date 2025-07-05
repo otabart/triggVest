@@ -88,7 +88,7 @@ export function StrategiesGridSection() {
         <section className="py-20 md:py-28 bg-background">
             <div className="container mx-auto px-4 md:px-6">
                 <div className="text-center mb-16">
-                    <h2 className="text-5xl md:text-6xl font-bold font-luckiest-guy text-foreground">Your Strategy Arsenal</h2>
+                    <h2 className="text-5xl md:text-6xl font-bold font-sans text-foreground">Your Strategy Arsenal</h2>
                     <p className="mt-4 text-lg text-muted-foreground mb-8">
                         Each strategy is locked, loaded, and ready to fire when conditions are met.
                     </p>

@@ -6,10 +6,10 @@ export function HeroSection() {
     return (
         <section className="relative overflow-hidden py-20 md:py-32 bg-background">
             <div className="container mx-auto px-4 md:px-6">
-                <div className="grid md:grid-cols-2 gap-12 items-center">
+                <div className="grid md:grid-cols-2 items-center">
                     <div className="z-10 space-y-6">
                         <div>
-                            <h1 className="text-6xl md:text-8xl font-bold font-luckiest-guy text-foreground leading-tight tracking-wider">
+                            <h1 className="text-6xl md:text-8xl font-bold font-sans text-foreground leading-tight tracking-wider">
                                 You Set The Rules.
                                 <br />
                                 We Pull The Trigger.

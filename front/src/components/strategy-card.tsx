@@ -34,7 +34,7 @@ export function StrategyCard({ strategy }: StrategyCardProps) {
                             <strategy.icon className="w-6 h-6 text-accent" />
                         </div>
                         <div>
-                            <h3 className="text-xl font-bold font-luckiest-guy text-foreground">{strategy.name}</h3>
+                            <h3 className="text-xl font-bold font-sans text-foreground">{strategy.name}</h3>
                             <div
                                 className={`flex items-center gap-1 text-sm font-bold ${isActive ? "text-green-600" : "text-yellow-600"
                                     }`}
@@ -71,17 +71,17 @@ export function StrategyCard({ strategy }: StrategyCardProps) {
 
                 <div className="grid grid-cols-3 gap-4 text-center">
                     <div>
-                        <div className={`text-lg font-bold font-luckiest-guy ${isPositive ? "text-green-600" : "text-red-600"}`}>
+                        <div className={`text-lg font-bold font-sans ${isPositive ? "text-green-600" : "text-red-600"}`}>
                             {strategy.performance}
                         </div>
                         <div className="text-xs text-muted-foreground">Performance</div>
                     </div>
                     <div>
-                        <div className="text-lg font-bold font-luckiest-guy text-foreground">{strategy.totalTriggers}</div>
+                        <div className="text-lg font-bold font-sans text-foreground">{strategy.totalTriggers}</div>
                         <div className="text-xs text-muted-foreground">Triggers</div>
                     </div>
                     <div>
-                        <div className="text-lg font-bold font-luckiest-guy text-foreground">{strategy.lastTriggered}</div>
+                        <div className="text-lg font-bold font-sans text-foreground">{strategy.lastTriggered}</div>
                         <div className="text-xs text-muted-foreground">Last Fired</div>
                     </div>
                 </div>

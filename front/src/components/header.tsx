@@ -11,7 +11,7 @@ export function Header() {
                     <div className="relative">
                         <Image src="/triggvest-logo.png" alt="Triggvest Logo" width={48} height={48} className="rounded-full" />
                     </div>
-                    <span className="text-3xl font-bold font-luckiest-guy text-foreground">Triggvest</span>
+                    <span className="text-3xl font-bold font-sans text-foreground">Triggvest</span>
                 </Link>
                 <nav className="hidden items-center gap-8 text-base md:flex">
                     <Link

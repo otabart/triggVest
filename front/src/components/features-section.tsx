@@ -30,7 +30,7 @@ export function FeaturesSection() {
             <section id="features" className="py-20 md:py-28 bg-background">
                 <div className="container mx-auto px-4 md:px-6">
                     <div className="text-center mb-16">
-                        <h2 className="text-5xl md:text-6xl font-bold font-luckiest-guy text-foreground">
+                        <h2 className="text-5xl md:text-6xl font-bold font-sans text-foreground">
                             Armed With The Best Features
                         </h2>
                         <p className="mt-4 text-lg text-muted-foreground">Everything you need for smart, automated investing.</p>
@@ -42,7 +42,7 @@ export function FeaturesSection() {
                                     <feature.icon className="w-8 h-8 text-accent" />
                                 </div>
                                 <div className="flex-1">
-                                    <h3 className="text-2xl font-bold text-foreground font-luckiest-guy mb-2">{feature.title}</h3>
+                                    <h3 className="text-2xl font-bold text-foreground font-sans mb-2">{feature.title}</h3>
                                     <p className="text-muted-foreground text-base leading-relaxed">{feature.description}</p>
                                 </div>
                             </div>

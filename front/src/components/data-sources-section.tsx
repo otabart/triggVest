@@ -50,7 +50,7 @@ export function DataSourcesSection() {
             <section className="py-20 md:py-28 bg-secondary overflow-hidden">
                 <div className="container mx-auto px-4 md:px-6 text-center">
                     <div>
-                        <h2 className="text-5xl md:text-6xl font-bold font-luckiest-guy text-foreground">
+                        <h2 className="text-5xl md:text-6xl font-bold font-sans text-foreground">
                             Live Market-Moving Tweets
                         </h2>
                         <p className="mt-4 text-lg text-muted-foreground mb-16">
@@ -66,7 +66,7 @@ export function DataSourcesSection() {
                                 className="flex-shrink-0 bg-card p-6 rounded-none border-4 border-black min-w-[400px] max-w-[400px]"
                             >
                                 <div className="flex items-start justify-between mb-3">
-                                    <span className="text-accent font-bold text-lg font-luckiest-guy">{tweet.handle}</span>
+                                    <span className="text-accent font-bold text-lg font-sans">{tweet.handle}</span>
                                     <div
                                         className={`flex items-center gap-1 px-3 py-1 rounded-none border-2 border-black text-sm font-bold ${tweet.sentiment === "bullish" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
                                             }`}

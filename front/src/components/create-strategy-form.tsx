@@ -72,7 +72,7 @@ export function CreateStrategyForm() {
                         <ArrowLeft className="w-5 h-5" />
                         Back to Arsenal
                     </Link>
-                    <h1 className="text-5xl md:text-6xl font-bold font-luckiest-guy text-foreground">Create New Strategy</h1>
+                    <h1 className="text-5xl md:text-6xl font-bold font-sans text-foreground">Create New Strategy</h1>
                     <p className="mt-4 text-lg text-muted-foreground">
                         Lock and load your next automated trading strategy in 4 simple steps.
                     </p>
@@ -84,9 +84,9 @@ export function CreateStrategyForm() {
                         {steps.map((step, index) => (
                             <div key={step.number} className="flex items-center">
                                 <div
-                                    className={`flex items-center justify-center w-12 h-12 rounded-none border-4 border-black font-bold font-luckiest-guy transition-all duration-300 ${currentStep >= step.number
-                                            ? "bg-accent text-accent-foreground"
-                                            : "bg-secondary text-muted-foreground"
+                                    className={`flex items-center justify-center w-12 h-12 rounded-none border-4 border-black font-bold font-sans transition-all duration-300 ${currentStep >= step.number
+                                        ? "bg-accent text-accent-foreground"
+                                        : "bg-secondary text-muted-foreground"
                                         }`}
                                 >
                                     {step.number}
@@ -98,7 +98,7 @@ export function CreateStrategyForm() {
                         ))}
                     </div>
                     <div className="text-center">
-                        <h2 className="text-2xl font-bold font-luckiest-guy text-foreground">{steps[currentStep - 1].title}</h2>
+                        <h2 className="text-2xl font-bold font-sans text-foreground">{steps[currentStep - 1].title}</h2>
                     </div>
                 </div>
 
@@ -109,7 +109,7 @@ export function CreateStrategyForm() {
                         {currentStep === 1 && (
                             <div className="space-y-6">
                                 <div>
-                                    <label className="block text-lg font-bold font-luckiest-guy text-foreground mb-4">
+                                    <label className="block text-lg font-bold font-sans text-foreground mb-4">
                                         Strategy Name
                                     </label>
                                     <input
@@ -122,7 +122,7 @@ export function CreateStrategyForm() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-lg font-bold font-luckiest-guy text-foreground mb-4">Description</label>
+                                    <label className="block text-lg font-bold font-sans text-foreground mb-4">Description</label>
                                     <textarea
                                         value={formData.description}
                                         onChange={(e) => handleInputChange("description", e.target.value)}
@@ -133,7 +133,7 @@ export function CreateStrategyForm() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-lg font-bold font-luckiest-guy text-foreground mb-4">
+                                    <label className="block text-lg font-bold font-sans text-foreground mb-4">
                                         Trigger Source
                                     </label>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -142,8 +142,8 @@ export function CreateStrategyForm() {
                                                 key={source.id}
                                                 onClick={() => handleInputChange("triggerType", source.id)}
                                                 className={`p-4 border-4 border-black cursor-pointer transition-all duration-200 hover:translate-x-1 hover:translate-y-1 ${formData.triggerType === source.id
-                                                        ? "bg-accent text-accent-foreground"
-                                                        : "bg-secondary hover:bg-secondary/80"
+                                                    ? "bg-accent text-accent-foreground"
+                                                    : "bg-secondary hover:bg-secondary/80"
                                                     }`}
                                             >
                                                 <div className="flex items-center gap-3">
@@ -157,7 +157,7 @@ export function CreateStrategyForm() {
 
                                 {formData.triggerType === "twitter" && (
                                     <div>
-                                        <label className="block text-lg font-bold font-luckiest-guy text-foreground mb-4">
+                                        <label className="block text-lg font-bold font-sans text-foreground mb-4">
                                             Twitter Handle
                                         </label>
                                         <input
@@ -172,7 +172,7 @@ export function CreateStrategyForm() {
 
                                 {formData.triggerType && (
                                     <div>
-                                        <label className="block text-lg font-bold font-luckiest-guy text-foreground mb-4">
+                                        <label className="block text-lg font-bold font-sans text-foreground mb-4">
                                             Keywords to Monitor
                                         </label>
                                         <input
@@ -191,19 +191,19 @@ export function CreateStrategyForm() {
                         {currentStep === 2 && (
                             <div className="space-y-6">
                                 <div>
-                                    <label className="block text-lg font-bold font-luckiest-guy text-foreground mb-4">Action Type</label>
+                                    <label className="block text-lg font-bold font-sans text-foreground mb-4">Action Type</label>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {actions.map((action) => (
                                             <div
                                                 key={action.id}
                                                 onClick={() => handleInputChange("actionType", action.id)}
                                                 className={`p-4 border-4 border-black cursor-pointer transition-all duration-200 hover:translate-x-1 hover:translate-y-1 ${formData.actionType === action.id
-                                                        ? "bg-accent text-accent-foreground"
-                                                        : "bg-secondary hover:bg-secondary/80"
+                                                    ? "bg-accent text-accent-foreground"
+                                                    : "bg-secondary hover:bg-secondary/80"
                                                     }`}
                                             >
                                                 <div className="text-center">
-                                                    <div className="font-bold font-luckiest-guy text-xl mb-2">{action.name}</div>
+                                                    <div className="font-bold font-sans text-xl mb-2">{action.name}</div>
                                                     <div className="text-sm">{action.description}</div>
                                                 </div>
                                             </div>
@@ -212,7 +212,7 @@ export function CreateStrategyForm() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-lg font-bold font-luckiest-guy text-foreground mb-4">Amount (USD)</label>
+                                    <label className="block text-lg font-bold font-sans text-foreground mb-4">Amount (USD)</label>
                                     <input
                                         type="number"
                                         value={formData.amount}
@@ -228,7 +228,7 @@ export function CreateStrategyForm() {
                         {currentStep === 3 && (
                             <div className="space-y-6">
                                 <div>
-                                    <label className="block text-lg font-bold font-luckiest-guy text-foreground mb-4">Token Symbol</label>
+                                    <label className="block text-lg font-bold font-sans text-foreground mb-4">Token Symbol</label>
                                     <input
                                         type="text"
                                         value={formData.tokenSymbol}
@@ -239,19 +239,19 @@ export function CreateStrategyForm() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-lg font-bold font-luckiest-guy text-foreground mb-4">Blockchain</label>
+                                    <label className="block text-lg font-bold font-sans text-foreground mb-4">Blockchain</label>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {blockchains.map((blockchain) => (
                                             <div
                                                 key={blockchain.id}
                                                 onClick={() => handleInputChange("blockchain", blockchain.id)}
                                                 className={`p-4 border-4 border-black cursor-pointer transition-all duration-200 hover:translate-x-1 hover:translate-y-1 ${formData.blockchain === blockchain.id
-                                                        ? "bg-accent text-accent-foreground"
-                                                        : "bg-secondary hover:bg-secondary/80"
+                                                    ? "bg-accent text-accent-foreground"
+                                                    : "bg-secondary hover:bg-secondary/80"
                                                     }`}
                                             >
                                                 <div className="text-center">
-                                                    <div className="font-bold font-luckiest-guy text-xl">{blockchain.name}</div>
+                                                    <div className="font-bold font-sans text-xl">{blockchain.name}</div>
                                                     <div className="text-sm">{blockchain.symbol}</div>
                                                 </div>
                                             </div>
@@ -265,7 +265,7 @@ export function CreateStrategyForm() {
                         {currentStep === 4 && (
                             <div className="space-y-6">
                                 <div className="bg-secondary p-6 border-4 border-black">
-                                    <h3 className="text-2xl font-bold font-luckiest-guy text-foreground mb-4">Strategy Summary</h3>
+                                    <h3 className="text-2xl font-bold font-sans text-foreground mb-4">Strategy Summary</h3>
                                     <div className="space-y-3">
                                         <div>
                                             <strong>Name:</strong> {formData.name}

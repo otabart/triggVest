@@ -8,7 +8,7 @@ export function CtaSection() {
             <section className="py-20 md:py-32 bg-background relative overflow-hidden">
                 <div className="container mx-auto px-4 md:px-6 text-center relative z-10">
                     <div>
-                        <h2 className="text-5xl md:text-6xl font-bold font-luckiest-guy text-foreground">
+                        <h2 className="text-5xl md:text-6xl font-bold font-sans text-foreground">
                             Ready to Be Quick on the Draw?
                         </h2>
                         <p className="mt-6 max-w-3xl mx-auto text-lg text-muted-foreground leading-relaxed">
