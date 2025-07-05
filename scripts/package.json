@@ -1,0 +1,21 @@
+{
+  "name": "triggvest-scripts",
+  "version": "1.0.0",
+  "description": "Scripts de test pour TriggVest",
+  "main": "test-full-flow.ts",
+  "scripts": {
+    "test": "ts-node test-full-flow.ts",
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/ws": "^8.5.10",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.3.0"
+  }
+} 
