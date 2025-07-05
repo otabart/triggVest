@@ -1,6 +1,8 @@
+"use client"
+
 import { StrategyCard } from "@/components/strategy-card"
 import { Button } from "@/components/ui/button"
-import { Target, TrendingUp, TrendingDown, Zap, Bot, Shield, Plus } from "lucide-react"
+import { Plus } from "lucide-react"
 import Link from "next/link"
 
 const strategies = [
@@ -10,11 +12,11 @@ const strategies = [
         description: "Automatically buy DOGE when Elon tweets about Dogecoin",
         trigger: "@elonmusk mentions 'doge' or 'dogecoin'",
         action: "Buy $500 DOGE",
-        status: "active",
+        status: "active" as const,
         performance: "+23.4%",
         lastTriggered: "2 hours ago",
         totalTriggers: 12,
-        icon: Target,
+        icon: "target",
         chart: [65, 78, 82, 95, 88, 92, 105, 98, 112, 108, 125, 118],
     },
     {
@@ -23,11 +25,11 @@ const strategies = [
         description: "Sell risky assets when Fed announces rate hikes",
         trigger: "@federalreserve mentions 'rate increase'",
         action: "Sell 50% portfolio",
-        status: "active",
+        status: "active" as const,
         performance: "+8.7%",
         lastTriggered: "1 day ago",
         totalTriggers: 3,
-        icon: Shield,
+        icon: "shield",
         chart: [100, 95, 88, 92, 85, 90, 87, 93, 89, 95, 91, 97],
     },
     {
@@ -36,11 +38,11 @@ const strategies = [
         description: "Exit positions when SEC announces enforcement actions",
         trigger: "@SECGov mentions 'enforcement' or 'violation'",
         action: "Sell all altcoins",
-        status: "paused",
+        status: "paused" as const,
         performance: "-2.1%",
         lastTriggered: "3 days ago",
         totalTriggers: 8,
-        icon: TrendingDown,
+        icon: "trending-down",
         chart: [100, 98, 95, 92, 88, 85, 82, 79, 85, 88, 92, 95],
     },
     {
@@ -49,11 +51,11 @@ const strategies = [
         description: "Mirror large Bitcoin transactions from known whales",
         trigger: "Whale wallet moves >1000 BTC",
         action: "Buy $1000 BTC",
-        status: "active",
+        status: "active" as const,
         performance: "+15.2%",
         lastTriggered: "6 hours ago",
         totalTriggers: 7,
-        icon: TrendingUp,
+        icon: "trending-up",
         chart: [80, 85, 92, 88, 95, 102, 98, 105, 112, 108, 115, 120],
     },
     {
@@ -62,11 +64,11 @@ const strategies = [
         description: "Buy crypto when Trump posts positively about Bitcoin",
         trigger: "@realDonaldTrump mentions 'bitcoin' positively",
         action: "Buy $750 BTC",
-        status: "active",
+        status: "active" as const,
         performance: "+31.8%",
         lastTriggered: "12 hours ago",
         totalTriggers: 5,
-        icon: Zap,
+        icon: "zap",
         chart: [70, 75, 82, 88, 95, 102, 108, 115, 122, 118, 125, 132],
     },
     {
@@ -75,11 +77,11 @@ const strategies = [
         description: "Accumulate ETH when Vitalik discusses major upgrades",
         trigger: "@VitalikButerin mentions 'upgrade' or 'ethereum'",
         action: "Buy $600 ETH",
-        status: "active",
+        status: "active" as const,
         performance: "+19.6%",
         lastTriggered: "1 day ago",
         totalTriggers: 9,
-        icon: Bot,
+        icon: "bot",
         chart: [85, 88, 92, 95, 98, 102, 105, 108, 112, 115, 118, 122],
     },
 ]
