@@ -41,6 +41,15 @@ const blockchains = [
   { id: "base", name: "Base Sepolia", symbol: "BASE", disabled: false },
 ];
 
+const twitterAccounts = [
+  { id: "realdonaldtrump", name: "Donald Trump", handle: "@realdonaldtrump", icon: "🇺🇸" },
+  { id: "federalreserve", name: "Federal Reserve", handle: "@federalreserve", icon: "🏦" },
+  { id: "elonmusk", name: "Elon Musk", handle: "@elonmusk", icon: "🚀" },
+  { id: "coinbase", name: "Coinbase", handle: "@coinbase", icon: "💰" },
+  { id: "vitalikbuterin", name: "Vitalik Buterin", handle: "@vitalikbuterin", icon: "⚡" },
+  { id: "custom", name: "Personnalisé", handle: "", icon: "📝" },
+];
+
 interface DeployedStrategy {
   id: string;
   generatedAddress: string;
@@ -69,6 +78,8 @@ export function CreateStrategyForm() {
     amount: "",
     blockchain: "",
   });
+  
+  const [selectedTwitterAccount, setSelectedTwitterAccount] = useState<string>("");
 
   // États pour la modal de déploiement
   const [isModalOpen, setIsModalOpen] = useState(false);
