@@ -391,15 +391,52 @@ export function CreateStrategyForm() {
                     <label className="block text-lg font-bold font-sans text-foreground mb-4">
                       Twitter Handle
                     </label>
-                    <input
-                      type="text"
-                      value={formData.triggerSource}
-                      onChange={(e) =>
-                        handleInputChange("triggerSource", e.target.value)
-                      }
-                      placeholder="@elonmusk"
-                      className="w-full p-4 border-4 border-black rounded-none bg-background text-foreground font-bold text-lg focus:outline-none focus:ring-2 focus:ring-accent"
-                    />
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {twitterAccounts.map((account) => (
+                          <div
+                            key={account.id}
+                            onClick={() => {
+                              setSelectedTwitterAccount(account.id);
+                              if (account.id === "custom") {
+                                handleInputChange("triggerSource", "");
+                              } else {
+                                handleInputChange("triggerSource", account.handle);
+                              }
+                            }}
+                            className={`p-4 border-4 border-black transition-all duration-200 cursor-pointer ${
+                              selectedTwitterAccount === account.id
+                                ? "bg-accent text-accent-foreground hover:translate-x-1 hover:translate-y-1"
+                                : "bg-secondary hover:bg-secondary/80 hover:translate-x-1 hover:translate-y-1"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className="text-2xl">{account.icon}</span>
+                              <div>
+                                <div className="font-bold font-sans text-lg">{account.name}</div>
+                                <div className="text-sm opacity-75">
+                                  {account.handle || "Saisir manuellement"}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {selectedTwitterAccount === "custom" && (
+                        <div className="mt-4">
+                          <input
+                            type="text"
+                            value={formData.triggerSource}
+                            onChange={(e) =>
+                              handleInputChange("triggerSource", e.target.value)
+                            }
+                            placeholder="@votre_compte"
+                            className="w-full p-4 border-4 border-black rounded-none bg-background text-foreground font-bold text-lg focus:outline-none focus:ring-2 focus:ring-accent"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
