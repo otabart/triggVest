@@ -10,7 +10,6 @@ import {
   Crosshair,
   Sparkles,
   Save,
-  Eye,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -22,17 +21,17 @@ const triggerSources = [
 ];
 
 const actions = [
-  { id: "buy", name: "Buy", description: "Purchase a specific token" },
-  { id: "sell", name: "Sell", description: "Sell a specific token" },
-  { id: "swap", name: "Swap", description: "Exchange one token for another" },
-  { id: "stop", name: "Stop Loss", description: "Sell when price drops" },
+  { id: "buy", name: "Buy", description: "Purchase a specific token", disabled: false },
+  { id: "sell", name: "Sell", description: "Sell a specific token", disabled: false },
+  { id: "swap", name: "Swap", description: "Exchange one token for another", disabled: true },
 ];
 
 const blockchains = [
-  { id: "ethereum", name: "Ethereum", symbol: "ETH" },
-  { id: "bsc", name: "Binance Smart Chain", symbol: "BNB" },
-  { id: "polygon", name: "Polygon", symbol: "MATIC" },
-  { id: "arbitrum", name: "Arbitrum", symbol: "ARB" },
+  { id: "ethereum", name: "Ethereum", symbol: "ETH", disabled: true },
+  { id: "bsc", name: "Binance Smart Chain", symbol: "BNB", disabled: true },
+  { id: "polygon", name: "Polygon", symbol: "MATIC", disabled: true },
+  { id: "arbitrum", name: "Arbitrum Sepolia", symbol: "ARB", disabled: false },
+  { id: "base", name: "Base Sepolia", symbol: "BASE", disabled: false },
 ];
 
 export function CreateStrategyForm() {
@@ -226,28 +225,30 @@ export function CreateStrategyForm() {
                   <label className="block text-lg font-bold font-sans text-foreground mb-4">
                     Action Type
                   </label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {actions.map((action) => (
-                      <div
-                        key={action.id}
-                        onClick={() =>
-                          handleInputChange("actionType", action.id)
-                        }
-                        className={`p-4 border-4 border-black cursor-pointer transition-all duration-200 hover:translate-x-1 hover:translate-y-1 ${
-                          formData.actionType === action.id
-                            ? "bg-accent text-accent-foreground"
-                            : "bg-secondary hover:bg-secondary/80"
-                        }`}
-                      >
-                        <div className="text-center">
-                          <div className="font-bold font-sans text-xl mb-2">
-                            {action.name}
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {actions.map((action) => (
+                        <div
+                          key={action.id}
+                          onClick={() =>
+                            !action.disabled && handleInputChange("actionType", action.id)
+                          }
+                          className={`p-4 border-4 border-black transition-all duration-200 ${
+                            action.disabled 
+                              ? "cursor-not-allowed opacity-50 bg-gray-100" 
+                              : formData.actionType === action.id
+                              ? "bg-accent text-accent-foreground cursor-pointer hover:translate-x-1 hover:translate-y-1"
+                              : "bg-secondary hover:bg-secondary/80 cursor-pointer hover:translate-x-1 hover:translate-y-1"
+                          }`}
+                        >
+                          <div className="text-center">
+                            <div className="font-bold font-sans text-xl mb-2">
+                              {action.name}
+                            </div>
+                            <div className="text-sm">{action.description}</div>
                           </div>
-                          <div className="text-sm">{action.description}</div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
                 </div>
 
                 <div>
@@ -289,28 +290,30 @@ export function CreateStrategyForm() {
                   <label className="block text-lg font-bold font-sans text-foreground mb-4">
                     Blockchain
                   </label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {blockchains.map((blockchain) => (
-                      <div
-                        key={blockchain.id}
-                        onClick={() =>
-                          handleInputChange("blockchain", blockchain.id)
-                        }
-                        className={`p-4 border-4 border-black cursor-pointer transition-all duration-200 hover:translate-x-1 hover:translate-y-1 ${
-                          formData.blockchain === blockchain.id
-                            ? "bg-accent text-accent-foreground"
-                            : "bg-secondary hover:bg-secondary/80"
-                        }`}
-                      >
-                        <div className="text-center">
-                          <div className="font-bold font-sans text-xl">
-                            {blockchain.name}
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {blockchains.map((blockchain) => (
+                        <div
+                          key={blockchain.id}
+                          onClick={() =>
+                            !blockchain.disabled && handleInputChange("blockchain", blockchain.id)
+                          }
+                          className={`p-4 border-4 border-black transition-all duration-200 ${
+                            blockchain.disabled 
+                              ? "cursor-not-allowed opacity-50 bg-gray-100" 
+                              : formData.blockchain === blockchain.id
+                              ? "bg-accent text-accent-foreground cursor-pointer hover:translate-x-1 hover:translate-y-1"
+                              : "bg-secondary hover:bg-secondary/80 cursor-pointer hover:translate-x-1 hover:translate-y-1"
+                          }`}
+                        >
+                          <div className="text-center">
+                            <div className="font-bold font-sans text-xl">
+                              {blockchain.name}
+                            </div>
+                            <div className="text-sm">{blockchain.symbol}</div>
                           </div>
-                          <div className="text-sm">{blockchain.symbol}</div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
                 </div>
               </div>
             )}
@@ -376,30 +379,21 @@ export function CreateStrategyForm() {
                 Previous
               </Button>
 
-              <div className="flex gap-4">
-                {currentStep === 4 ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      className="font-bold px-6 py-3 rounded-none border-4 border-black bg-transparent"
-                    >
-                      <Eye className="w-4 h-4 mr-2" />
-                      Preview
-                    </Button>
-                    <Button className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold px-6 py-3 rounded-none border-4 border-black transition-all duration-200 hover:translate-x-2 hover:translate-y-2 active:translate-x-0 active:translate-y-0">
-                      <Save className="w-4 h-4 mr-2" />
-                      Deploy Strategy
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    onClick={nextStep}
-                    className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold px-6 py-3 rounded-none border-4 border-black transition-all duration-200 hover:translate-x-2 hover:translate-y-2 active:translate-x-0 active:translate-y-0"
-                  >
-                    Next Step
-                  </Button>
-                )}
-              </div>
+                                          <div className="flex gap-4">
+                              {currentStep === 4 ? (
+                                <Button className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold px-6 py-3 rounded-none border-4 border-black transition-all duration-200 hover:translate-x-2 hover:translate-y-2 active:translate-x-0 active:translate-y-0">
+                                  <Save className="w-4 h-4 mr-2" />
+                                  Deploy Strategy
+                                </Button>
+                              ) : (
+                                <Button
+                                  onClick={nextStep}
+                                  className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold px-6 py-3 rounded-none border-4 border-black transition-all duration-200 hover:translate-x-2 hover:translate-y-2 active:translate-x-0 active:translate-y-0"
+                                >
+                                  Next Step
+                                </Button>
+                              )}
+                            </div>
             </div>
           </CardContent>
         </Card>
