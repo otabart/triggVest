@@ -1,52 +1,133 @@
+"use client"
+
 import { Card, CardContent } from "@/components/ui/card"
 import { TrendingUp, Wallet, Zap, DollarSign, Target, Activity } from "lucide-react"
+import { useState, useEffect } from "react"
 
-const overviewStats = [
-    {
-        icon: DollarSign,
-        label: "Total Portfolio Value",
-        value: "$127,450",
-        change: "+15.3%",
-        positive: true,
-    },
-    {
-        icon: Activity,
-        label: "Total Transactions",
-        value: "1,247",
-        change: "+23 today",
-        positive: true,
-    },
-    {
-        icon: TrendingUp,
-        label: "Trading Volume (24h)",
-        value: "$45,892",
-        change: "+8.7%",
-        positive: true,
-    },
-    {
-        icon: Target,
-        label: "Active Strategies",
-        value: "24",
-        change: "+3 this week",
-        positive: true,
-    },
-    {
-        icon: Zap,
-        label: "Triggers Fired",
-        value: "156",
-        change: "+12 today",
-        positive: true,
-    },
-    {
-        icon: Wallet,
-        label: "Connected Wallets",
-        value: "24",
-        change: "All active",
-        positive: true,
-    },
-]
+interface DashboardStats {
+    totalStrategies: number
+    activeStrategies: number
+    totalExecutions: number
+    totalUsers: number
+    totalWallets: number
+    recentExecutions: number
+}
 
 export function DashboardOverview() {
+    const [stats, setStats] = useState<DashboardStats | null>(null)
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+
+    useEffect(() => {
+        const fetchDashboardStats = async () => {
+            try {
+                setLoading(true)
+                const response = await fetch(`${process.env.NEXT_PUBLIC_STRATEGY_ROUTER_API}api/dashboard-stats`)
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch dashboard stats')
+                }
+                
+                const data = await response.json()
+                
+                if (data.success) {
+                    setStats(data.stats)
+                } else {
+                    throw new Error(data.message || 'Failed to fetch stats')
+                }
+            } catch (err) {
+                console.error('Error fetching dashboard stats:', err)
+                setError('Failed to load dashboard statistics')
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        fetchDashboardStats()
+    }, [])
+
+    // Calculer les statistiques dynamiques
+    const getOverviewStats = (stats: DashboardStats) => [
+        {
+            icon: Target,
+            label: "Total Strategies",
+            value: stats.totalStrategies.toString(),
+            change: `${stats.activeStrategies} active`,
+            positive: stats.activeStrategies > 0,
+        },
+        {
+            icon: Activity,
+            label: "Total Executions",
+            value: stats.totalExecutions.toString(),
+            change: `${stats.recentExecutions} recent`,
+            positive: stats.recentExecutions > 0,
+        },
+        {
+            icon: TrendingUp,
+            label: "Platform Activity",
+            value: stats.totalUsers > 1 ? "Active" : "Starting",
+            change: `${stats.totalUsers} users`,
+            positive: stats.totalUsers > 0,
+        },
+        {
+            icon: Wallet,
+            label: "Strategy Wallets",
+            value: stats.totalWallets.toString(),
+            change: "All generated",
+            positive: stats.totalWallets > 0,
+        },
+        {
+            icon: Zap,
+            label: "Triggers Ready",
+            value: stats.activeStrategies.toString(),
+            change: "Monitoring",
+            positive: stats.activeStrategies > 0,
+        },
+        {
+            icon: DollarSign,
+            label: "System Status",
+            value: stats.totalStrategies > 0 ? "Operational" : "Standby",
+            change: "All systems go",
+            positive: true,
+        },
+    ]
+
+    if (loading) {
+        return (
+            <section className="py-20 md:py-28 bg-background">
+                <div className="container mx-auto px-4 md:px-6">
+                    <div className="text-center mb-16">
+                        <h1 className="text-5xl md:text-6xl font-bold font-sans text-foreground">Command Center</h1>
+                        <p className="mt-4 text-lg text-muted-foreground">Loading battle statistics...</p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {Array.from({ length: 6 }).map((_, index) => (
+                            <Card key={index} className="rounded-none border-4 border-black animate-pulse">
+                                <CardContent className="p-6">
+                                    <div className="h-24 bg-gray-200 rounded"></div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                </div>
+            </section>
+        )
+    }
+
+    if (error || !stats) {
+        return (
+            <section className="py-20 md:py-28 bg-background">
+                <div className="container mx-auto px-4 md:px-6">
+                    <div className="text-center mb-16">
+                        <h1 className="text-5xl md:text-6xl font-bold font-sans text-foreground">Command Center Offline</h1>
+                        <p className="mt-4 text-lg text-muted-foreground">Unable to load battle statistics.</p>
+                    </div>
+                </div>
+            </section>
+        )
+    }
+
+    const overviewStats = getOverviewStats(stats)
     return (
         <section className="py-20 md:py-28 bg-background">
             <div className="container mx-auto px-4 md:px-6">

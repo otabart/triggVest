@@ -36,18 +36,22 @@ export function Header() {
                     >
                         Dashboard
                     </Link>
-                    <Link
-                        href="/strategy"
-                        className="relative transition-colors hover:text-accent after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-0 after:bg-accent after:transition-all after:duration-300 hover:after:w-full"
-                    >
-                        My Strategies
-                    </Link>
-                    <Link
-                        href="/strategy/new"
-                        className="relative transition-colors hover:text-accent after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-0 after:bg-accent after:transition-all after:duration-300 hover:after:w-full"
-                    >
-                        New Strategy
-                    </Link>
+                    {isConnected && (
+                        <>
+                            <Link
+                                href="/strategy"
+                                className="relative transition-colors hover:text-accent after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-0 after:bg-accent after:transition-all after:duration-300 hover:after:w-full"
+                            >
+                                My Strategies
+                            </Link>
+                            <Link
+                                href="/strategy/new"
+                                className="relative transition-colors hover:text-accent after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-0 after:bg-accent after:transition-all after:duration-300 hover:after:w-full"
+                            >
+                                New Strategy
+                            </Link>
+                        </>
+                    )}
                 </nav>
                 <Button
                     onClick={handleConnect}

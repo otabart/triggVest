@@ -4,89 +4,137 @@ import { StrategyCard } from "@/components/strategy-card"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 import Link from "next/link"
+import { useState, useEffect } from "react"
 
-const strategies = [
-    {
-        id: 1,
-        name: "Elon's DOGE Pump",
-        description: "Automatically buy DOGE when Elon tweets about Dogecoin",
-        trigger: "@elonmusk mentions 'doge' or 'dogecoin'",
-        action: "Buy $500 DOGE",
+interface ApiStrategy {
+    id: string
+    userId: string
+    strategyName: string
+    generatedAddress: string
+    triggers: Array<{
+        type: string
+        account?: string
+        keywords: string[]
+    }>
+    actions: Array<{
+        type: string
+        targetAsset: string
+        targetChain: string
+    }>
+}
+
+interface Strategy {
+    id: string  // Changé de number à string pour utiliser les vrais IDs
+    name: string
+    description: string
+    trigger: string
+    action: string
+    status: "active" | "paused" | "inactive"
+    performance: string
+    lastTriggered: string
+    totalTriggers: number
+    icon: string
+    chart: number[]
+}
+
+// Fonction pour convertir les données API en format attendu par StrategyCard
+function convertApiStrategyToCardStrategy(apiStrategy: ApiStrategy, index: number): Strategy {
+    const trigger = apiStrategy.triggers[0]
+    const action = apiStrategy.actions[0]
+    
+    // Générer des données aléatoires mais cohérentes pour la démo
+    const performances = ["+23.4%", "+8.7%", "-2.1%", "+15.2%", "+31.8%", "+19.6%"]
+    const lastTriggeredOptions = ["2 hours ago", "1 day ago", "3 days ago", "6 hours ago", "12 hours ago", "1 day ago"]
+    const icons = ["target", "shield", "trending-down", "trending-up", "zap", "bot"]
+    const chartData = [
+        [65, 78, 82, 95, 88, 92, 105, 98, 112, 108, 125, 118],
+        [100, 95, 88, 92, 85, 90, 87, 93, 89, 95, 91, 97],
+        [80, 85, 92, 88, 95, 102, 98, 105, 112, 108, 115, 120]
+    ]
+    
+    return {
+        id: apiStrategy.id, // Utiliser le vrai ID de la base de données
+        name: apiStrategy.strategyName,
+        description: `Automated ${action.type} strategy for ${action.targetAsset} triggered by ${trigger.account}`,
+        trigger: `${trigger.account} mentions ${trigger.keywords.map(k => `'${k}'`).join(' or ')}`,
+        action: `${action.type.charAt(0).toUpperCase() + action.type.slice(1)} ${action.targetAsset} on ${action.targetChain}`,
         status: "active" as const,
-        performance: "+23.4%",
-        lastTriggered: "2 hours ago",
-        totalTriggers: 12,
-        icon: "target",
-        chart: [65, 78, 82, 95, 88, 92, 105, 98, 112, 108, 125, 118],
-    },
-    {
-        id: 2,
-        name: "Fed Rate Hedge",
-        description: "Sell risky assets when Fed announces rate hikes",
-        trigger: "@federalreserve mentions 'rate increase'",
-        action: "Sell 50% portfolio",
-        status: "active" as const,
-        performance: "+8.7%",
-        lastTriggered: "1 day ago",
-        totalTriggers: 3,
-        icon: "shield",
-        chart: [100, 95, 88, 92, 85, 90, 87, 93, 89, 95, 91, 97],
-    },
-    {
-        id: 3,
-        name: "SEC Crackdown Alert",
-        description: "Exit positions when SEC announces enforcement actions",
-        trigger: "@SECGov mentions 'enforcement' or 'violation'",
-        action: "Sell all altcoins",
-        status: "paused" as const,
-        performance: "-2.1%",
-        lastTriggered: "3 days ago",
-        totalTriggers: 8,
-        icon: "trending-down",
-        chart: [100, 98, 95, 92, 88, 85, 82, 79, 85, 88, 92, 95],
-    },
-    {
-        id: 4,
-        name: "Whale Alert Follower",
-        description: "Mirror large Bitcoin transactions from known whales",
-        trigger: "Whale wallet moves >1000 BTC",
-        action: "Buy $1000 BTC",
-        status: "active" as const,
-        performance: "+15.2%",
-        lastTriggered: "6 hours ago",
-        totalTriggers: 7,
-        icon: "trending-up",
-        chart: [80, 85, 92, 88, 95, 102, 98, 105, 112, 108, 115, 120],
-    },
-    {
-        id: 5,
-        name: "Trump Crypto Boost",
-        description: "Buy crypto when Trump posts positively about Bitcoin",
-        trigger: "@realDonaldTrump mentions 'bitcoin' positively",
-        action: "Buy $750 BTC",
-        status: "active" as const,
-        performance: "+31.8%",
-        lastTriggered: "12 hours ago",
-        totalTriggers: 5,
-        icon: "zap",
-        chart: [70, 75, 82, 88, 95, 102, 108, 115, 122, 118, 125, 132],
-    },
-    {
-        id: 6,
-        name: "Vitalik's ETH Vision",
-        description: "Accumulate ETH when Vitalik discusses major upgrades",
-        trigger: "@VitalikButerin mentions 'upgrade' or 'ethereum'",
-        action: "Buy $600 ETH",
-        status: "active" as const,
-        performance: "+19.6%",
-        lastTriggered: "1 day ago",
-        totalTriggers: 9,
-        icon: "bot",
-        chart: [85, 88, 92, 95, 98, 102, 105, 108, 112, 115, 118, 122],
-    },
-]
+        performance: performances[index % performances.length],
+        lastTriggered: lastTriggeredOptions[index % lastTriggeredOptions.length],
+        totalTriggers: Math.floor(Math.random() * 20) + 1,
+        icon: icons[index % icons.length],
+        chart: chartData[index % chartData.length],
+    }
+}
 
 export function StrategiesGridSection() {
+    const [strategies, setStrategies] = useState<Strategy[]>([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+
+    useEffect(() => {
+        const fetchStrategies = async () => {
+            try {
+                setLoading(true)
+                const response = await fetch(`${process.env.NEXT_PUBLIC_STRATEGY_ROUTER_API}api/strategies`)
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch strategies')
+                }
+                
+                const data = await response.json()
+                
+                if (data.success && data.strategies) {
+                    const convertedStrategies = data.strategies.map((apiStrategy: ApiStrategy, index: number) => 
+                        convertApiStrategyToCardStrategy(apiStrategy, index)
+                    )
+                    setStrategies(convertedStrategies)
+                } else {
+                    setStrategies([])
+                }
+            } catch (err) {
+                console.error('Error fetching strategies:', err)
+                setError('Failed to load strategies')
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        fetchStrategies()
+    }, [])
+
+    if (loading) {
+        return (
+            <section className="py-20 md:py-28 bg-background">
+                <div className="container mx-auto px-4 md:px-6">
+                    <div className="text-center">
+                        <h2 className="text-5xl md:text-6xl font-bold font-sans text-foreground">Loading Arsenal...</h2>
+                        <p className="mt-4 text-lg text-muted-foreground">
+                            Fetching your strategies from the battlefield.
+                        </p>
+                    </div>
+                </div>
+            </section>
+        )
+    }
+
+    if (error) {
+        return (
+            <section className="py-20 md:py-28 bg-background">
+                <div className="container mx-auto px-4 md:px-6">
+                    <div className="text-center">
+                        <h2 className="text-5xl md:text-6xl font-bold font-sans text-foreground">Arsenal Offline</h2>
+                        <p className="mt-4 text-lg text-muted-foreground mb-8">
+                            Failed to connect to strategy command center. Check your connection.
+                        </p>
+                        <Button onClick={() => window.location.reload()}>
+                            Retry Connection
+                        </Button>
+                    </div>
+                </div>
+            </section>
+        )
+    }
     return (
         <section className="py-20 md:py-28 bg-background">
             <div className="container mx-auto px-4 md:px-6">

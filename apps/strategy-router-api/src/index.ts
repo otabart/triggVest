@@ -644,6 +644,79 @@ app.get('/api/strategies', async (req: express.Request, res: express.Response) =
 });
 
 /**
+ * GET /api/strategy/:id
+ * 
+ * Récupère une stratégie spécifique par son ID
+ * 
+ * @route GET /api/strategy/:id
+ * @param {string} id - ID de la stratégie
+ * @returns {Object} Stratégie trouvée
+ * 
+ * @example
+ * GET /api/strategy/cmcr28ruz0002xumjlctuylsw
+ */
+app.get('/api/strategy/:id', async (req: express.Request, res: express.Response) => {
+  try {
+    const { id } = req.params;
+    console.log(`🔍 [STRATEGY] Récupération de la stratégie: ${id}`);
+    
+    const strategy = await prisma.strategy.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            walletAddress: true,
+            createdAt: true
+          }
+        },
+        triggers: true,
+        actions: true,
+        executions: {
+          take: 10,
+          orderBy: { createdAt: 'desc' }
+        }
+      }
+    });
+    
+    if (!strategy) {
+      console.log(`❌ [STRATEGY] Stratégie ${id} non trouvée`);
+      return res.status(404).json({
+        success: false,
+        error: 'Stratégie non trouvée',
+        message: `Aucune stratégie avec l'ID "${id}" n'a été trouvée`
+      });
+    }
+    
+    console.log(`✅ [STRATEGY] Stratégie trouvée: ${strategy.strategyName}`);
+    
+    res.json({
+      success: true,
+      strategy: {
+        id: strategy.id,
+        name: strategy.strategyName,
+        description: strategy.strategyName, // Utiliser le nom comme description temporaire
+        status: strategy.isActive ? 'active' : 'inactive',
+        userWalletAddress: strategy.user.walletAddress,
+        generatedAddress: strategy.generatedAddress,
+        triggers: strategy.triggers,
+        actions: strategy.actions,
+        executions: strategy.executions,
+        createdAt: strategy.createdAt,
+        updatedAt: strategy.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('❌ [STRATEGY] Erreur lors de la récupération:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération de la stratégie',
+      message: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+  }
+});
+
+/**
  * GET /api/status
  * 
  * Récupère le statut de l'API Strategy Router
@@ -687,6 +760,226 @@ app.get('/api/status', async (req: express.Request, res: express.Response<ApiSta
   }
 });
 
+/**
+ * GET /api/dashboard-stats
+ * 
+ * Récupère les statistiques pour le dashboard
+ * 
+ * @route GET /api/dashboard-stats
+ * @returns {Object} Statistiques du dashboard
+ * 
+ * @example
+ * GET /api/dashboard-stats
+ * {
+ *   "success": true,
+ *   "stats": {
+ *     "totalStrategies": 12,
+ *     "activeStrategies": 8,
+ *     "totalExecutions": 45,
+ *     "totalUsers": 3,
+ *     "totalWallets": 12,
+ *     "recentExecutions": 7
+ *   }
+ * }
+ */
+app.get('/api/dashboard-stats', async (req: express.Request, res: express.Response) => {
+  try {
+    console.log(`🔍 [DASHBOARD_STATS] Récupération des statistiques`);
+    
+    // Récupération des statistiques depuis la base de données
+    const totalStrategies = await prisma.strategy.count();
+    const activeStrategies = await prisma.strategy.count({
+      where: { isActive: true }
+    });
+    const totalExecutions = await prisma.execution.count();
+    const totalUsers = await prisma.user.count();
+    const totalWallets = await prisma.strategy.count({
+      where: { generatedAddress: { not: "" } }
+    });
+    
+    // Exécutions récentes (dernières 24h)
+    const oneDayAgo = new Date();
+    oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+    const recentExecutions = await prisma.execution.count({
+      where: {
+        createdAt: {
+          gte: oneDayAgo
+        }
+      }
+    });
+    
+    const stats = {
+      totalStrategies,
+      activeStrategies,
+      totalExecutions,
+      totalUsers,
+      totalWallets,
+      recentExecutions
+    };
+    
+    console.log(`✅ [DASHBOARD_STATS] Statistiques récupérées:`, stats);
+    
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    console.error('❌ [DASHBOARD_STATS] Erreur lors de la récupération:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération des statistiques',
+      message: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+  }
+});
+
+/**
+ * DELETE /api/strategy/:id
+ * 
+ * Supprime une stratégie spécifique
+ * 
+ * @route DELETE /api/strategy/:id
+ * @param {string} id - ID de la stratégie à supprimer
+ * @returns {Object} Résultat de la suppression
+ * 
+ * @example
+ * DELETE /api/strategy/cmcr14t270008icthcbqz59d5
+ * {
+ *   "success": true,
+ *   "message": "Stratégie supprimée avec succès",
+ *   "strategyId": "cmcr14t270008icthcbqz59d5"
+ * }
+ */
+app.delete('/api/strategy/:id', async (req: express.Request, res: express.Response) => {
+  try {
+    const { id } = req.params;
+    console.log(`🗑️ [DELETE_STRATEGY] Suppression de la stratégie: ${id}`);
+    
+    // Vérifier si la stratégie existe
+    const existingStrategy = await prisma.strategy.findUnique({
+      where: { id }
+    });
+    
+    if (!existingStrategy) {
+      console.log(`❌ [DELETE_STRATEGY] Stratégie ${id} non trouvée`);
+      return res.status(404).json({
+        success: false,
+        error: 'Stratégie non trouvée',
+        message: `Aucune stratégie avec l'ID "${id}" n'a été trouvée`
+      });
+    }
+    
+    // Supprimer les exécutions associées
+    await prisma.execution.deleteMany({
+      where: { strategyId: id }
+    });
+    console.log(`✅ [DELETE_STRATEGY] Exécutions supprimées pour la stratégie ${id}`);
+    
+    // Supprimer la stratégie
+    await prisma.strategy.delete({
+      where: { id }
+    });
+    
+    console.log(`✅ [DELETE_STRATEGY] Stratégie ${existingStrategy.strategyName} supprimée avec succès`);
+    
+    res.json({
+      success: true,
+      message: 'Stratégie supprimée avec succès',
+      strategyId: id
+    });
+  } catch (error) {
+    console.error('❌ [DELETE_STRATEGY] Erreur lors de la suppression:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la suppression de la stratégie',
+      message: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+  }
+});
+
+/**
+ * PATCH /api/strategy/:id
+ * 
+ * Modifie une stratégie existante
+ * 
+ * @route PATCH /api/strategy/:id
+ * @param {string} id - ID de la stratégie à modifier
+ * @param {Object} body - Données à modifier
+ * @returns {Object} Stratégie modifiée
+ * 
+ * @example
+ * PATCH /api/strategy/cmcr14t270008icthcbqz59d5
+ * {
+ *   "name": "Nouveau nom",
+ *   "description": "Nouvelle description"
+ * }
+ */
+app.patch('/api/strategy/:id', async (req: express.Request, res: express.Response) => {
+  try {
+    const { id } = req.params;
+    const { name, description } = req.body;
+    
+    console.log(`✏️ [PATCH_STRATEGY] Modification de la stratégie: ${id}`);
+    
+    // Vérifier si la stratégie existe
+    const existingStrategy = await prisma.strategy.findUnique({
+      where: { id }
+    });
+    
+    if (!existingStrategy) {
+      console.log(`❌ [PATCH_STRATEGY] Stratégie ${id} non trouvée`);
+      return res.status(404).json({
+        success: false,
+        error: 'Stratégie non trouvée',
+        message: `Aucune stratégie avec l'ID "${id}" n'a été trouvée`
+      });
+    }
+    
+    // Préparer les données à modifier
+    const updateData: any = {};
+    if (name !== undefined) updateData.strategyName = name;
+    // Note: il n'y a pas de champ description dans le schéma Prisma
+    
+    // Mettre à jour la stratégie
+    const updatedStrategy = await prisma.strategy.update({
+      where: { id },
+      data: updateData,
+      include: {
+        user: true,
+        triggers: true,
+        actions: true,
+        executions: true
+      }
+    });
+    
+    console.log(`✅ [PATCH_STRATEGY] Stratégie ${updatedStrategy.strategyName} modifiée avec succès`);
+    
+    res.json({
+      success: true,
+      message: 'Stratégie modifiée avec succès',
+      strategy: {
+        id: updatedStrategy.id,
+        name: updatedStrategy.strategyName,
+        description: updatedStrategy.strategyName, // Utiliser le nom comme description
+        status: updatedStrategy.isActive ? 'active' : 'inactive',
+        userWalletAddress: updatedStrategy.user.walletAddress,
+        generatedAddress: updatedStrategy.generatedAddress,
+        triggers: updatedStrategy.triggers,
+        actions: updatedStrategy.actions,
+        createdAt: updatedStrategy.createdAt,
+        updatedAt: updatedStrategy.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('❌ [PATCH_STRATEGY] Erreur lors de la modification:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la modification de la stratégie',
+      message: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+  }
+});
+
 // =====================================
 // DÉMARRAGE DU SERVEUR
 // =====================================
@@ -702,13 +995,17 @@ app.listen(PORT, async () => {
   console.log(`🌐 API REST disponible sur http://localhost:${PORT}/api`);
   console.log(`📨 Prêt à recevoir des événements du CLI sur /api/process-event`);
   console.log(`📋 Routes disponibles:`);
-  console.log(`   POST /api/create-strategy        - Créer une nouvelle stratégie`);
-  console.log(`   GET  /api/user-strategies/:addr  - Stratégies d'un utilisateur`);
-  console.log(`   POST /api/process-event          - Traiter un événement`);
-  console.log(`   GET  /api/supported-chains       - Chaînes supportées`);
-  console.log(`   GET  /api/smart-account/:id      - Info Smart Account`);
-  console.log(`   GET  /api/strategies             - Toutes les stratégies`);
-  console.log(`   GET  /api/status                 - Statut de l'API`);
+  console.log(`   POST   /api/create-strategy        - Créer une nouvelle stratégie`);
+  console.log(`   GET    /api/user-strategies/:addr  - Stratégies d'un utilisateur`);
+  console.log(`   POST   /api/process-event          - Traiter un événement`);
+  console.log(`   GET    /api/supported-chains       - Chaînes supportées`);
+  console.log(`   GET    /api/smart-account/:id      - Info Smart Account`);
+  console.log(`   GET    /api/strategies             - Toutes les stratégies`);
+  console.log(`   GET    /api/strategy/:id           - Une stratégie spécifique`);
+  console.log(`   PATCH  /api/strategy/:id           - Modifier une stratégie`);
+  console.log(`   DELETE /api/strategy/:id           - Supprimer une stratégie`);
+  console.log(`   GET    /api/dashboard-stats        - Statistiques du dashboard`);
+  console.log(`   GET    /api/status                 - Statut de l'API`);
   console.log(`🎯 Fonctionnalités:`);
   console.log(`   ✅ Gestion des stratégies utilisateur`);
   console.log(`   ✅ Traitement des événements Twitter`);

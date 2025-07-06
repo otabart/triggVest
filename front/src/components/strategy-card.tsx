@@ -7,7 +7,7 @@ import { MiniChart } from "@/components/mini-chart"
 import Link from "next/link"
 
 interface Strategy {
-    id: number
+    id: string  // Changé pour accepter les vrais IDs de base de données
     name: string
     description: string
     trigger: string

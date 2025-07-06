@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useAccount } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Modal, ModalButton } from "@/components/ui/modal";
 import {
   ArrowLeft,
   Target,
@@ -10,6 +12,9 @@ import {
   Crosshair,
   Sparkles,
   Save,
+  CheckCircle,
+  XCircle,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -34,7 +39,22 @@ const blockchains = [
   { id: "base", name: "Base Sepolia", symbol: "BASE", disabled: false },
 ];
 
+interface DeployedStrategy {
+  id: string;
+  generatedAddress: string;
+  strategyName: string;
+  userWalletAddress: string;
+  wallet?: {
+    privateKey: string;
+    address: string;
+  };
+  smartAccount?: {
+    address: string;
+  };
+}
+
 export function CreateStrategyForm() {
+  const { address, isConnected } = useAccount();
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     name: "",
@@ -47,6 +67,12 @@ export function CreateStrategyForm() {
     amount: "",
     blockchain: "",
   });
+
+  // États pour la modal de déploiement
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [deploymentStatus, setDeploymentStatus] = useState<'loading' | 'success' | 'error' | null>(null);
+  const [deploymentMessage, setDeploymentMessage] = useState("");
+  const [deployedStrategy, setDeployedStrategy] = useState<DeployedStrategy | null>(null);
 
   const steps = [
     { number: 1, title: "Pick a Trigger", icon: Target },
@@ -65,6 +91,139 @@ export function CreateStrategyForm() {
 
   const prevStep = () => {
     if (currentStep > 1) setCurrentStep(currentStep - 1);
+  };
+
+  const deployStrategy = async () => {
+    // Validation des champs requis
+    if (!formData.name || !formData.triggerType || !formData.actionType || !formData.blockchain) {
+      setDeploymentStatus('error');
+      setDeploymentMessage("Veuillez remplir tous les champs requis");
+      setIsModalOpen(true);
+      return;
+    }
+
+    // Vérifier si l'utilisateur est connecté
+    if (!isConnected || !address) {
+      setDeploymentStatus('error');
+      setDeploymentMessage("Veuillez connecter votre wallet pour créer une stratégie");
+      setIsModalOpen(true);
+      return;
+    }
+
+    // Ouvrir la modal et commencer le déploiement
+    setIsModalOpen(true);
+    setDeploymentStatus('loading');
+    setDeploymentMessage("Déploiement de votre stratégie en cours...");
+
+    try {
+      // Préparation des données pour l'API
+      const strategyData = {
+        userWalletAddress: address, // Utiliser l'adresse du wallet connecté
+        strategyName: formData.name,
+        triggers: [
+          {
+            type: formData.triggerType,
+            account: formData.triggerSource,
+            keywords: formData.triggerKeywords.split(',').map(k => k.trim()).filter(k => k)
+          }
+        ],
+        actions: [
+          {
+            type: formData.actionType,
+            targetAsset: formData.tokenSymbol || "USDC",
+            targetChain: formData.blockchain,
+            amount: formData.amount
+          }
+        ]
+        // Pas de Smart Account pour éviter l'erreur RPC
+      };
+
+      console.log("🚀 Déploiement de la stratégie:", strategyData);
+
+      // Appel à l'API Strategy Router
+      const response = await fetch(`${process.env.NEXT_PUBLIC_STRATEGY_ROUTER_API}api/create-strategy`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(strategyData),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        console.log("✅ Stratégie créée:", result.strategy);
+        
+        // Créer le Smart Account uniquement si nous avons un wallet avec privateKey
+        if (result.strategy.wallet && result.strategy.wallet.privateKey) {
+          setDeploymentMessage("Création du Smart Account gasless...");
+          
+          try {
+            const smartAccountResponse = await fetch(`${process.env.NEXT_PUBLIC_STRATEGY_ROUTER_API}api/smart-account`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                chain: formData.blockchain,
+                ownerPrivateKey: result.strategy.wallet.privateKey,
+                strategyId: result.strategy.id,
+              }),
+            });
+
+            const smartAccountData = await smartAccountResponse.json();
+            
+            if (smartAccountData.success) {
+              console.log('✅ Smart Account créé:', smartAccountData.smartAccount);
+              setDeploymentStatus('success');
+              setDeploymentMessage(`Stratégie déployée avec succès ! Smart Account: ${smartAccountData.smartAccount.address}`);
+              setDeployedStrategy({
+                ...result.strategy,
+                smartAccount: smartAccountData.smartAccount
+              });
+            } else {
+              console.warn('⚠️ Smart Account non créé:', smartAccountData.message);
+              setDeploymentStatus('success');
+              setDeploymentMessage(`Stratégie déployée avec succès ! ID: ${result.strategy.id} (Mode MVP)`);
+              setDeployedStrategy(result.strategy);
+            }
+          } catch (smartAccountError) {
+            console.warn('⚠️ Erreur Smart Account:', smartAccountError);
+            setDeploymentStatus('success');
+            setDeploymentMessage(`Stratégie déployée avec succès ! ID: ${result.strategy.id} (Mode MVP)`);
+            setDeployedStrategy(result.strategy);
+          }
+        } else {
+          // Mode simplifié sans Smart Account
+          console.log('📋 Mode simplifié - pas de Smart Account');
+          setDeploymentStatus('success');
+          setDeploymentMessage(`Stratégie déployée avec succès ! ID: ${result.strategy.id}`);
+          setDeployedStrategy(result.strategy);
+        }
+      } else {
+        setDeploymentStatus('error');
+        setDeploymentMessage(`Erreur lors du déploiement: ${result.message}`);
+        console.error("❌ Erreur:", result);
+      }
+    } catch (error) {
+      console.error("❌ Erreur lors du déploiement:", error);
+      setDeploymentStatus('error');
+      setDeploymentMessage("Erreur lors du déploiement de la stratégie");
+    }
+  };
+
+  const closeModalAndRedirect = () => {
+    setIsModalOpen(false);
+    if (deploymentStatus === 'success') {
+      window.location.href = "/strategy";
+    }
+  };
+
+  const resetModal = () => {
+    setIsModalOpen(false);
+    setDeploymentStatus(null);
+    setDeploymentMessage("");
+    setDeployedStrategy(null);
   };
 
   return (
@@ -333,8 +492,11 @@ export function CreateStrategyForm() {
                       <strong>Description:</strong> {formData.description}
                     </div>
                     <div>
+                      <strong>Connected Wallet:</strong> {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected"}
+                    </div>
+                    <div>
                       <strong>Trigger:</strong> {formData.triggerSource}{" "}
-                      mentions "{formData.triggerKeywords}"
+                      mentions &quot;{formData.triggerKeywords}&quot;
                     </div>
                     <div>
                       <strong>Action:</strong> {formData.actionType} $
@@ -381,9 +543,12 @@ export function CreateStrategyForm() {
 
                                           <div className="flex gap-4">
                               {currentStep === 4 ? (
-                                <Button className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold px-6 py-3 rounded-none border-4 border-black transition-all duration-200 hover:translate-x-2 hover:translate-y-2 active:translate-x-0 active:translate-y-0">
+                                <Button 
+                                  onClick={deployStrategy}
+                                  disabled={!isConnected}
+                                  className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold px-6 py-3 rounded-none border-4 border-black transition-all duration-200 hover:translate-x-2 hover:translate-y-2 active:translate-x-0 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-x-0 disabled:hover:translate-y-0">
                                   <Save className="w-4 h-4 mr-2" />
-                                  Deploy Strategy
+                                  {isConnected ? "Deploy Strategy" : "Connect Wallet to Deploy"}
                                 </Button>
                               ) : (
                                 <Button
@@ -398,6 +563,118 @@ export function CreateStrategyForm() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Modal de déploiement */}
+      <Modal 
+        isOpen={isModalOpen} 
+        onClose={resetModal} 
+        title="🚀 Strategy Deployment"
+        size="md"
+      >
+        <div className="space-y-6">
+          {/* Contenu de la modal basé sur le statut */}
+          {deploymentStatus === 'loading' && (
+            <div className="text-center space-y-4">
+              <div className="flex justify-center">
+                <Loader2 className="w-12 h-12 animate-spin text-accent" />
+              </div>
+              <div className="text-xl font-bold font-sans text-foreground">
+                Deploying Strategy...
+              </div>
+              <div className="text-muted-foreground">
+                {deploymentMessage}
+              </div>
+              <div className="bg-secondary p-4 border-2 border-black rounded-none">
+                <div className="text-sm space-y-2">
+                  <div>⚡ Creating wallet...</div>
+                  <div>🔗 Connecting to blockchain...</div>
+                  <div>📝 Registering strategy...</div>
+                  <div>🎯 Setting up triggers...</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {deploymentStatus === 'success' && (
+            <div className="text-center space-y-4">
+              <div className="flex justify-center">
+                <CheckCircle className="w-12 h-12 text-green-500" />
+              </div>
+              <div className="text-xl font-bold font-sans text-foreground">
+                Strategy Deployed Successfully! 🎉
+              </div>
+              <div className="text-muted-foreground">
+                {deploymentMessage}
+              </div>
+              
+              {deployedStrategy && (
+                <div className="bg-green-50 border-4 border-green-500 p-4 rounded-none">
+                  <div className="text-left space-y-2">
+                    <div><strong>Strategy ID:</strong> {deployedStrategy.id}</div>
+                    <div><strong>Generated Wallet:</strong> {deployedStrategy.generatedAddress}</div>
+                    <div><strong>Status:</strong> <span className="text-green-600 font-bold">ACTIVE</span></div>
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex gap-4 justify-center">
+                <ModalButton
+                  variant="success"
+                  onClick={closeModalAndRedirect}
+                >
+                  Go to Strategy Arsenal
+                </ModalButton>
+                <ModalButton
+                  variant="default"
+                  onClick={resetModal}
+                >
+                  Create Another
+                </ModalButton>
+              </div>
+            </div>
+          )}
+
+          {deploymentStatus === 'error' && (
+            <div className="text-center space-y-4">
+              <div className="flex justify-center">
+                <XCircle className="w-12 h-12 text-red-500" />
+              </div>
+              <div className="text-xl font-bold font-sans text-foreground">
+                Deployment Failed ❌
+              </div>
+              <div className="text-muted-foreground">
+                {deploymentMessage}
+              </div>
+              
+              <div className="bg-red-50 border-4 border-red-500 p-4 rounded-none">
+                <div className="text-left text-sm">
+                  <div className="font-bold mb-2">Common Issues:</div>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>Network connection issues</li>
+                    <li>Incomplete form data</li>
+                    <li>API server temporarily unavailable</li>
+                  </ul>
+                </div>
+              </div>
+              
+              <div className="flex gap-4 justify-center">
+                <ModalButton
+                  variant="destructive"
+                  onClick={deployStrategy}
+                >
+                  Try Again
+                </ModalButton>
+                <ModalButton
+                  variant="default"
+                  onClick={resetModal}
+                >
+                  Close
+                </ModalButton>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
     </section>
   );
 }
