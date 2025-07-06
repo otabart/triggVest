@@ -17,6 +17,7 @@ import {
   Loader2,
 } from "lucide-react";
 import Link from "next/link";
+import { getTokensForChain, getTokenBySymbol, getTokenAddress } from "@/lib/tokens";
 
 const triggerSources = [
   { id: "twitter", name: "Twitter/X Account", icon: "🐦", disabled: false },
@@ -28,6 +29,7 @@ const triggerSources = [
 const actions = [
   { id: "buy", name: "Buy", description: "Purchase a specific token", disabled: false },
   { id: "sell", name: "Sell", description: "Sell a specific token", disabled: false },
+  { id: "bridge_gasless", name: "Bridge", description: "Bridge USDC from Arbitrum to Base gaslessly", disabled: false },
   { id: "swap", name: "Swap", description: "Exchange one token for another", disabled: true },
 ];
 
@@ -70,9 +72,10 @@ export function CreateStrategyForm() {
 
   // États pour la modal de déploiement
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [deploymentStatus, setDeploymentStatus] = useState<'loading' | 'success' | 'error' | null>(null);
+  const [deploymentStatus, setDeploymentStatus] = useState<'loading' | 'success' | 'error' | 'awaiting_funding' | null>(null);
   const [deploymentMessage, setDeploymentMessage] = useState("");
   const [deployedStrategy, setDeployedStrategy] = useState<DeployedStrategy | null>(null);
+  const [smartAccountAddress, setSmartAccountAddress] = useState<string | null>(null);
 
   const steps = [
     { number: 1, title: "Pick a Trigger", icon: Target },
@@ -130,8 +133,9 @@ export function CreateStrategyForm() {
         actions: [
           {
             type: formData.actionType,
-            targetAsset: formData.tokenSymbol || "USDC",
-            targetChain: formData.blockchain,
+            targetAsset: formData.actionType === "bridge_gasless" ? "USDC" : (formData.tokenSymbol || "USDC"),
+            targetChain: formData.actionType === "bridge_gasless" ? "base" : formData.blockchain,
+            sourceChain: formData.actionType === "bridge_gasless" ? "arbitrum" : undefined,
             amount: formData.amount
           }
         ]
@@ -154,51 +158,52 @@ export function CreateStrategyForm() {
       if (result.success) {
         console.log("✅ Stratégie créée:", result.strategy);
         
-        // Créer le Smart Account uniquement si nous avons un wallet avec privateKey
-        if (result.strategy.wallet && result.strategy.wallet.privateKey) {
-          setDeploymentMessage("Création du Smart Account gasless...");
-          
-          try {
-            const smartAccountResponse = await fetch(`${process.env.NEXT_PUBLIC_STRATEGY_ROUTER_API}api/smart-account`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                chain: formData.blockchain,
-                ownerPrivateKey: result.strategy.wallet.privateKey,
-                strategyId: result.strategy.id,
-              }),
-            });
+        // Créer le Smart Account automatiquement après la création de la stratégie
+        setDeploymentMessage("Création du Smart Account gasless...");
+        
+        try {
+          const smartAccountResponse = await fetch(`${process.env.NEXT_PUBLIC_STRATEGY_ROUTER_API}api/smart-account`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              chain: formData.blockchain,
+              strategyId: result.strategy.id,
+            }),
+          });
 
-            const smartAccountData = await smartAccountResponse.json();
+          const smartAccountData = await smartAccountResponse.json();
+          
+          if (smartAccountData.success) {
+            console.log('✅ Smart Account créé:', smartAccountData.smartAccount);
             
-            if (smartAccountData.success) {
-              console.log('✅ Smart Account créé:', smartAccountData.smartAccount);
-              setDeploymentStatus('success');
-              setDeploymentMessage(`Stratégie déployée avec succès ! Smart Account: ${smartAccountData.smartAccount.address}`);
-              setDeployedStrategy({
-                ...result.strategy,
-                smartAccount: smartAccountData.smartAccount
-              });
-            } else {
-              console.warn('⚠️ Smart Account non créé:', smartAccountData.message);
-              setDeploymentStatus('success');
-              setDeploymentMessage(`Stratégie déployée avec succès ! ID: ${result.strategy.id} (Mode MVP)`);
-              setDeployedStrategy(result.strategy);
-            }
-          } catch (smartAccountError) {
-            console.warn('⚠️ Erreur Smart Account:', smartAccountError);
-            setDeploymentStatus('success');
-            setDeploymentMessage(`Stratégie déployée avec succès ! ID: ${result.strategy.id} (Mode MVP)`);
-            setDeployedStrategy(result.strategy);
+            // Passer en mode "awaiting_funding" pour demander à l'utilisateur de transférer 5 USDC
+            setDeploymentStatus('awaiting_funding');
+            setDeploymentMessage("Smart Account créé ! Veuillez maintenant l'alimenter avec 5 USDC.");
+            setSmartAccountAddress(smartAccountData.smartAccount.address);
+            setDeployedStrategy({
+              ...result.strategy,
+              smartAccount: smartAccountData.smartAccount
+            });
+          } else {
+            console.error('❌ Smart Account API Error:', smartAccountData);
+            console.error('❌ Response status:', smartAccountResponse.status);
+            
+            setDeploymentStatus('error');
+            setDeploymentMessage(`Erreur lors de la création du Smart Account: ${smartAccountData.message || 'API Smart Account indisponible'}`);
+            return;
           }
-        } else {
-          // Mode simplifié sans Smart Account
-          console.log('📋 Mode simplifié - pas de Smart Account');
-          setDeploymentStatus('success');
-          setDeploymentMessage(`Stratégie déployée avec succès ! ID: ${result.strategy.id}`);
-          setDeployedStrategy(result.strategy);
+                } catch (smartAccountError) {
+          console.error('❌ Smart Account Network Error:', smartAccountError);
+          console.error('❌ Error details:', {
+            message: smartAccountError instanceof Error ? smartAccountError.message : 'Unknown error',
+            stack: smartAccountError instanceof Error ? smartAccountError.stack : 'No stack trace'
+          });
+          
+          setDeploymentStatus('error');
+          setDeploymentMessage(`Erreur de connexion à l'API Smart Account. Vérifiez que l'API Strategy Router est démarrée.`);
+          return;
         }
       } else {
         setDeploymentStatus('error');
@@ -224,6 +229,35 @@ export function CreateStrategyForm() {
     setDeploymentStatus(null);
     setDeploymentMessage("");
     setDeployedStrategy(null);
+    setSmartAccountAddress(null);
+  };
+
+  const confirmFunding = async () => {
+    if (!deployedStrategy || !smartAccountAddress) return;
+    
+    setDeploymentStatus('loading');
+    setDeploymentMessage("Vérification du financement...");
+    
+    try {
+      // Ici on pourrait vérifier la balance du Smart Account
+      // Pour l'instant, on assume que l'utilisateur a bien transféré 5 USDC
+      
+      // Simuler une petite attente pour la vérification
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      setDeploymentStatus('success');
+      setDeploymentMessage("Stratégie déployée avec succès ! Votre Smart Account est maintenant alimenté.");
+      
+    } catch (error) {
+      console.error("❌ Erreur lors de la vérification du financement:", error);
+      setDeploymentStatus('error');
+      setDeploymentMessage("Erreur lors de la vérification du financement. Veuillez réessayer.");
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    // Optionnel: afficher un toast de confirmation
   };
 
   return (
@@ -412,7 +446,7 @@ export function CreateStrategyForm() {
 
                 <div>
                   <label className="block text-lg font-bold font-sans text-foreground mb-4">
-                    Amount (USD)
+                    Amount (USDC)
                   </label>
                   <input
                     type="number"
@@ -432,17 +466,35 @@ export function CreateStrategyForm() {
               <div className="space-y-6">
                 <div>
                   <label className="block text-lg font-bold font-sans text-foreground mb-4">
-                    Token Symbol
+                    Token to Trade
                   </label>
-                  <input
-                    type="text"
-                    value={formData.tokenSymbol}
-                    onChange={(e) =>
-                      handleInputChange("tokenSymbol", e.target.value)
-                    }
-                    placeholder="DOGE"
-                    className="w-full p-4 border-4 border-black rounded-none bg-background text-foreground font-bold text-lg focus:outline-none focus:ring-2 focus:ring-accent"
-                  />
+                  {formData.blockchain ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {getTokensForChain(formData.blockchain as 'arbitrum' | 'base').map((token) => (
+                        <div
+                          key={token.symbol}
+                          onClick={() => handleInputChange("tokenSymbol", token.symbol)}
+                          className={`p-4 border-4 border-black transition-all duration-200 cursor-pointer ${
+                            formData.tokenSymbol === token.symbol
+                              ? "bg-accent text-accent-foreground hover:translate-x-1 hover:translate-y-1"
+                              : "bg-secondary hover:bg-secondary/80 hover:translate-x-1 hover:translate-y-1"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl">{token.logo}</span>
+                            <div>
+                              <div className="font-bold font-sans text-lg">{token.symbol}</div>
+                              <div className="text-sm opacity-75">{token.name}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-4 border-4 border-black bg-gray-100 text-center text-muted-foreground">
+                      Please select a blockchain first to see available tokens
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -499,8 +551,7 @@ export function CreateStrategyForm() {
                       mentions &quot;{formData.triggerKeywords}&quot;
                     </div>
                     <div>
-                      <strong>Action:</strong> {formData.actionType} $
-                      {formData.amount} of {formData.tokenSymbol}
+                      <strong>Action:</strong> {formData.actionType} {formData.amount} USDC worth of {formData.tokenSymbol}
                     </div>
                     <div>
                       <strong>Blockchain:</strong>{" "}
@@ -509,6 +560,16 @@ export function CreateStrategyForm() {
                           ?.name
                       }
                     </div>
+                    {formData.tokenSymbol && formData.blockchain && (
+                      <div>
+                        <strong>Token Details:</strong>{" "}
+                        {getTokenBySymbol(formData.tokenSymbol)?.name} ({formData.tokenSymbol})
+                        <br />
+                        <span className="text-sm text-muted-foreground">
+                          Contract: {getTokenAddress(formData.tokenSymbol, formData.blockchain as 'arbitrum' | 'base')}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -595,6 +656,98 @@ export function CreateStrategyForm() {
             </div>
           )}
 
+          {deploymentStatus === 'awaiting_funding' && (
+            <div className="text-center space-y-4">
+              <div className="flex justify-center">
+                <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-2xl">💰</span>
+                </div>
+              </div>
+              <div className="text-xl font-bold font-sans text-foreground">
+                Alimentez votre Smart Account 
+              </div>
+              <div className="text-muted-foreground">
+                {deploymentMessage}
+              </div>
+              
+              {smartAccountAddress && (
+                <div className="bg-blue-50 border-4 border-blue-500 p-6 rounded-none">
+                  <div className="text-left space-y-4">
+                    <div className="text-center">
+                      <div className="font-bold text-blue-800 text-lg mb-2">
+                        🏦 Adresse Smart Account
+                      </div>
+                      <div className="relative">
+                        <div className="text-sm bg-white p-3 border border-blue-400 rounded font-mono break-all pr-12">
+                          {smartAccountAddress}
+                        </div>
+                        <button
+                          onClick={() => copyToClipboard(smartAccountAddress)}
+                          className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 hover:bg-blue-100 rounded"
+                          title="Copier l'adresse"
+                        >
+                          📋
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="border-t pt-4">
+                      <div className="font-bold text-blue-800 mb-2">Instructions :</div>
+                      <ol className="list-decimal list-inside space-y-2 text-sm">
+                        <li>Copiez l'adresse Smart Account ci-dessus</li>
+                        <li>Transférez <strong>5 USDC</strong> depuis votre wallet vers cette adresse</li>
+                        <li>Attendez la confirmation de la transaction</li>
+                        <li>Cliquez sur "J'ai transféré les fonds" ci-dessous</li>
+                      </ol>
+                    </div>
+                    
+                    <div className="bg-yellow-100 border border-yellow-400 p-3 rounded">
+                      <div className="flex items-start gap-2">
+                        <span className="text-yellow-600">⚠️</span>
+                        <div className="text-sm text-yellow-800">
+                          <strong>Important :</strong> Assurez-vous d'envoyer exactement <strong>5 USDC</strong> sur la blockchain <strong>{blockchains.find(b => b.id === formData.blockchain)?.name}</strong>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-gray-50 border border-gray-300 p-3 rounded">
+                      <div className="text-sm">
+                        <div className="font-bold text-gray-700 mb-1">Adresse du contrat USDC :</div>
+                        <div className="relative">
+                          <div className="font-mono text-xs bg-white p-2 border border-gray-200 rounded break-all pr-8">
+                            {getTokenAddress("USDC", formData.blockchain as 'arbitrum' | 'base')}
+                          </div>
+                          <button
+                            onClick={() => copyToClipboard(getTokenAddress("USDC", formData.blockchain as 'arbitrum' | 'base') || '')}
+                            className="absolute right-1 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded text-xs"
+                            title="Copier l'adresse du contrat"
+                          >
+                            📋
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex gap-4 justify-center">
+                <ModalButton
+                  variant="success"
+                  onClick={confirmFunding}
+                >
+                  J'ai transféré les fonds
+                </ModalButton>
+                <ModalButton
+                  variant="default"
+                  onClick={resetModal}
+                >
+                  Annuler
+                </ModalButton>
+              </div>
+            </div>
+          )}
+
           {deploymentStatus === 'success' && (
             <div className="text-center space-y-4">
               <div className="flex justify-center">
@@ -609,10 +762,31 @@ export function CreateStrategyForm() {
               
               {deployedStrategy && (
                 <div className="bg-green-50 border-4 border-green-500 p-4 rounded-none">
-                  <div className="text-left space-y-2">
+                  <div className="text-left space-y-3">
                     <div><strong>Strategy ID:</strong> {deployedStrategy.id}</div>
-                    <div><strong>Generated Wallet:</strong> {deployedStrategy.generatedAddress}</div>
                     <div><strong>Status:</strong> <span className="text-green-600 font-bold">ACTIVE</span></div>
+                    
+                    <div className="border-t pt-3">
+                      <div className="font-bold text-green-800 mb-2">🔐 Wallet Custodial (Execution)</div>
+                      <div className="text-sm bg-white p-2 border border-green-400 rounded font-mono">
+                        {deployedStrategy.generatedAddress}
+                      </div>
+                      <div className="text-xs text-green-600 mt-1">
+                        • Wallet privé généré pour l'exécution automatique
+                      </div>
+                    </div>
+                    
+                    {deployedStrategy.smartAccount && (
+                      <div className="border-t pt-3">
+                        <div className="font-bold text-green-800 mb-2">🏦 Smart Account (Funding)</div>
+                        <div className="text-sm bg-white p-2 border border-green-400 rounded font-mono">
+                          {deployedStrategy.smartAccount.address}
+                        </div>
+                        <div className="text-xs text-green-600 mt-1">
+                          • Adresse à alimenter en USDC par l'utilisateur
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

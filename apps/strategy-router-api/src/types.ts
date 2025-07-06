@@ -50,14 +50,15 @@ export interface Job {
 
 export interface JobResponse {
   jobId: string;
-  strategyId: string;
-  userId: string;
-  strategyName: string;
-  triggeredBy: TweetEvent;
-  executions: any[];
+  strategyId?: string;
+  userId?: string;
+  strategyName?: string;
+  triggeredBy?: TweetEvent;
+  executions?: any[];
   status: string;
   timestamp: string;
   txHash?: string;
+  result?: any; // Résultat du job (ex: données de bridge)
 }
 
 export interface ApiStatus {

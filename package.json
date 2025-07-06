@@ -32,6 +32,8 @@
     "db:studio": "npx prisma studio",
     "db:reset": "npx prisma migrate reset",
     "db:deploy": "npx prisma migrate deploy",
+    "db:clean": "ts-node scripts/clean-database.ts",
+    "db:show": "ts-node scripts/show-database-details.ts",
     "start": "npm run start:all",
     "start:all": "concurrently \"npm run start:trigger\" \"npm run start:strategy\" \"npm run start:circle\"",
     "start:trigger": "cd apps/trigger-api && npm run dev",

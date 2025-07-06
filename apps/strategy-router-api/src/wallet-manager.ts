@@ -74,6 +74,7 @@ export async function createStrategyWithWallet(data: {
     type: string;
     targetAsset: string;
     targetChain: string;
+    amount?: string; // Montant pour les actions d'achat/vente
   }>;
   smartAccountChain?: string; // Chaîne pour créer le smart account (optionnel)
 }): Promise<{
@@ -135,12 +136,16 @@ export async function createStrategyWithWallet(data: {
 
     // Créer les actions
     for (const action of data.actions) {
+      // Construire les paramètres JSON avec le montant
+      const parameters = action.amount ? { amount: action.amount } : undefined;
+      
       await prisma.action.create({
         data: {
           strategyId: strategy.id,
           type: action.type,
           targetAsset: action.targetAsset,
-          targetChain: action.targetChain
+          targetChain: action.targetChain,
+          parameters: parameters
         }
       });
     }

@@ -10,7 +10,7 @@ import {
   getActiveStrategies,
   getStrategyWallet 
 } from './wallet-manager';
-import { getSupportedChains, getSmartAccountInfo } from './smart-account-manager';
+import { getSupportedChains, getSmartAccountInfo, createSmartAccount } from './smart-account-manager';
 
 dotenv.config();
 
@@ -176,11 +176,31 @@ async function sendJobToCircleExecutor(strategy: any, event: TweetEvent): Promis
   };
   
   try {
-    const response = await axios.post<JobResponse>('http://localhost:3003/api/execute-job', job);
-    console.log(`✅ [CIRCLE] Job envoyé avec succès: ${response.data.jobId}`);
-    return response.data;
+    // Format attendu par Circle Executor API pour bridge_gasless
+    const circleJob = {
+      type: 'bridge_gasless',
+      smartAccount: strategy.smartAccountAddress || strategy.generatedAddress,
+      fromChain: 'arbitrum', // Source: Arbitrum Sepolia
+      toChain: 'base',       // Destination: Base Sepolia
+      amount: strategy.actions[0]?.parameters?.amount || '1', // Montant depuis les paramètres
+      token: 'USDC'
+    };
+
+    console.log('📤 [CIRCLE] Sending bridge job:', circleJob);
+    
+    const response = await axios.post('http://localhost:3003/process-job', circleJob);
+    console.log(`✅ [CIRCLE] Bridge job envoyé avec succès`);
+    
+    // Transformer la réponse au format JobResponse attendu
+    return {
+      jobId: `bridge_${Date.now()}`,
+      status: response.data.success ? 'completed' : 'failed',
+      result: response.data.result,
+      timestamp: new Date().toISOString(),
+      txHash: response.data.result?.mintTxHash || null
+    };
   } catch (error) {
-    console.error('❌ [CIRCLE] Erreur lors de l\'envoi du job:', error instanceof Error ? error.message : 'Unknown error');
+    console.error('❌ [CIRCLE] Erreur lors de l\'envoi du bridge job:', error instanceof Error ? error.message : 'Unknown error');
     return null;
   }
 }
@@ -405,6 +425,150 @@ app.post('/api/create-strategy', async (req: express.Request, res: express.Respo
     res.status(500).json({
       success: false,
       error: 'Erreur lors de la création de la stratégie',
+      message: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+  }
+});
+
+/**
+ * POST /api/smart-account
+ * 
+ * Crée un Smart Account pour une stratégie existante
+ * 
+ * @route POST /api/smart-account
+ * @param {string} req.body.strategyId - ID de la stratégie
+ * @param {string} req.body.chain - Chaîne blockchain (arbitrum, base, etc.)
+ * 
+ * @returns {Object} Smart Account créé
+ * 
+ * @example
+ * POST /api/smart-account
+ * {
+ *   "strategyId": "cmcr4rpa50002tw6x1f4rpdew",
+ *   "chain": "arbitrum"
+ * }
+ */
+app.post('/api/smart-account', async (req: express.Request, res: express.Response) => {
+  try {
+    const { strategyId, chain } = req.body;
+    
+    console.log(`🔄 [SMART_ACCOUNT] Création pour la stratégie: ${strategyId} sur ${chain}`);
+    
+    // Validation des champs requis
+    if (!strategyId || !chain) {
+      console.error('❌ [SMART_ACCOUNT] Champs requis manquants');
+      return res.status(400).json({
+        success: false,
+        error: 'Champs requis manquants',
+        message: 'strategyId, chain sont requis'
+      });
+    }
+
+    // Vérifier que la stratégie existe
+    const strategy = await prisma.strategy.findUnique({
+      where: { id: strategyId }
+    });
+
+    if (!strategy) {
+      console.error(`❌ [SMART_ACCOUNT] Stratégie ${strategyId} non trouvée`);
+      return res.status(404).json({
+        success: false,
+        error: 'Stratégie non trouvée',
+        message: `Aucune stratégie avec l'ID "${strategyId}" n'a été trouvée`
+      });
+    }
+
+    // 🎯 DEMO MODE: Utiliser le Smart Account prédéfini
+    const DEMO_SMART_ACCOUNT = {
+      address: '0x30FaA798B5d332A733150bCA1556D7BeDA2CeB87',
+      owner: '0x9c8C8a7a5F4F1e0aE8c9d5b3f2E1A7b6c3d4e5f6',
+      chain: chain,
+      factory: '0x0000000000000000000000000000000000000000',
+      created: new Date(),
+      balance: '5000000' // 5 USDC (6 decimals)
+    };
+
+    console.log(`🎯 [DEMO] Utilisation du Smart Account prédéfini: ${DEMO_SMART_ACCOUNT.address}`);
+
+    // Vérifier si un Smart Account existe déjà
+    if (strategy.smartAccountAddress) {
+      console.log(`✅ [SMART_ACCOUNT] Smart Account existe déjà: ${strategy.smartAccountAddress}`);
+      return res.json({
+        success: true,
+        message: 'Smart Account existe déjà',
+        smartAccount: {
+          address: strategy.smartAccountAddress,
+          owner: strategy.smartAccountOwner,
+          chain: strategy.smartAccountChain,
+          factory: strategy.smartAccountFactory,
+          created: strategy.smartAccountCreated,
+          balance: strategy.smartAccountBalance.toString()
+        }
+      });
+    }
+
+    // Pour la démonstration, utiliser directement le Smart Account prédéfini
+    await prisma.strategy.update({
+      where: { id: strategyId },
+      data: {
+        smartAccountAddress: DEMO_SMART_ACCOUNT.address,
+        smartAccountOwner: DEMO_SMART_ACCOUNT.owner,
+        smartAccountChain: DEMO_SMART_ACCOUNT.chain,
+        smartAccountFactory: DEMO_SMART_ACCOUNT.factory,
+        smartAccountCreated: true,
+        smartAccountBalance: parseFloat(DEMO_SMART_ACCOUNT.balance)
+      }
+    });
+
+    console.log(`✅ [DEMO] Smart Account prédéfini assigné à la stratégie: ${strategyId}`);
+
+    return res.json({
+      success: true,
+      message: 'Smart Account prédéfini assigné avec succès',
+      smartAccount: DEMO_SMART_ACCOUNT
+    });
+
+    // Récupérer la clé privée de la stratégie (déchiffrée)
+    const strategyWallet = await getStrategyWallet(strategyId);
+    
+    if (!strategyWallet.wallet) {
+      console.error(`❌ [SMART_ACCOUNT] Impossible de récupérer le wallet de la stratégie ${strategyId}`);
+      return res.status(500).json({
+        success: false,
+        error: 'Erreur wallet',
+        message: 'Impossible de récupérer le wallet de la stratégie'
+      });
+    }
+
+    // Créer le Smart Account avec la clé privée déchiffrée
+    const smartAccountResult = await createSmartAccount({
+      chain,
+      ownerPrivateKey: strategyWallet.wallet.privateKey,
+      strategyId
+    });
+
+    if (!smartAccountResult.success) {
+      console.error(`❌ [SMART_ACCOUNT] Erreur création: ${smartAccountResult.message}`);
+      return res.status(500).json({
+        success: false,
+        error: 'Erreur lors de la création du Smart Account',
+        message: smartAccountResult.message
+      });
+    }
+
+    console.log(`✅ [SMART_ACCOUNT] Smart Account créé: ${smartAccountResult.smartAccount?.address}`);
+
+    res.json({
+      success: true,
+      message: 'Smart Account créé avec succès',
+      smartAccount: smartAccountResult.smartAccount
+    });
+
+  } catch (error) {
+    console.error('❌ [SMART_ACCOUNT] Erreur lors de la création:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la création du Smart Account',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
     });
   }
@@ -700,7 +864,13 @@ app.get('/api/strategy/:id', async (req: express.Request, res: express.Response)
         userWalletAddress: strategy.user.walletAddress,
         generatedAddress: strategy.generatedAddress,
         triggers: strategy.triggers,
-        actions: strategy.actions,
+        actions: strategy.actions.map(action => ({
+          ...action,
+          amount: action.parameters && typeof action.parameters === 'object' && 
+                  'amount' in action.parameters ? 
+                  String(action.parameters.amount) : 
+                  '0'
+        })),
         executions: strategy.executions,
         createdAt: strategy.createdAt,
         updatedAt: strategy.updatedAt

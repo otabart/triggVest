@@ -40,7 +40,7 @@ model Strategy {
   balance           Decimal  @default(0) // Balance en Wei
   
   // Smart Account Circle Paymaster
-  smartAccountAddress String? @unique @map("smart_account_address") // Adresse du smart account
+  smartAccountAddress String? @map("smart_account_address") // Adresse du smart account
   smartAccountOwner   String? @map("smart_account_owner") // Adresse propriétaire du smart account
   smartAccountChain   String? @map("smart_account_chain") // Chaîne du smart account (eth-sepolia, arb-sepolia, etc.)
   smartAccountFactory String? @map("smart_account_factory") // Adresse de la factory utilisée

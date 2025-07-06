@@ -138,8 +138,8 @@ export function StrategyDetailView({ strategyId }: StrategyDetailViewProps) {
                     ],
                     action: {
                         type: foundStrategy.actions?.[0]?.type || "buy",
-                        amount: `$${foundStrategy.actions?.[0]?.amount || "100"}`,
-                        description: `${foundStrategy.actions?.[0]?.type === "buy" ? "Purchase" : "Sell"} $${foundStrategy.actions?.[0]?.amount || "100"} worth of ${foundStrategy.actions?.[0]?.targetAsset || "USDC"}`
+                        amount: `$${foundStrategy.actions?.[0]?.amount ?? "0"}`,
+                        description: `${foundStrategy.actions?.[0]?.type === "buy" ? "Purchase" : "Sell"} $${foundStrategy.actions?.[0]?.amount ?? "0"} worth of ${foundStrategy.actions?.[0]?.targetAsset || "USDC"}`
                     },
                     target: {
                         token: foundStrategy.actions?.[0]?.targetAsset || "USDC",

@@ -1,659 +1,360 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { 
-  Job, 
-  JobResponse, 
-  Execution, 
-  ExecutionDetails, 
-  Action, 
-  ClosePositionRequest, 
-  ClosePositionResponse, 
-  ExecutionsResponse, 
-  ApiStatus 
-} from './types';
-import { 
-  SmartAccountService, 
-  SupportedChainId, 
-  createSmartAccountService,
-  isGaslessSupported
-} from './lib/smart-account-service';
-import { parseUnits } from 'viem';
 import axios from 'axios';
+import {
+  createPublicClient,
+  http,
+  parseUnits,
+  type Chain,
+  type Hex,
+  type Address,
+} from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import {
+  createBundlerClient,
+} from "viem/account-abstraction";
+import { toCircleSmartAccount } from "@circle-fin/modular-wallets-core";
+import {
+  arbitrumSepolia,
+  baseSepolia,
+} from "viem/chains";
 
 dotenv.config();
 
-/**
- * =====================================
- * CIRCLE EXECUTOR API - TRIGGVEST
- * =====================================
- * 
- * Cette API est responsable de l'exécution des transactions gasless
- * via Circle CCTP (Cross-Chain Transfer Protocol).
- * 
- * Fonctionnalités principales :
- * - Exécution de bridges gasless entre chaînes
- * - Gestion des Smart Accounts
- * - Traitement des jobs de stratégies
- * - Gestion des positions et clôtures
- * 
- * Port par défaut : 3003
- * 
- * Dépendances :
- * - Circle CCTP pour les bridges
- * - Smart Accounts pour l'exécution gasless
- * - Viem pour les interactions blockchain
- * 
- * =====================================
- */
+// Configuration des constantes CCTP (copiées depuis cctp-v2-web-app)
+const CHAIN_IDS_TO_USDC_ADDRESSES: Record<number, Hex> = {
+  421614: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", // Arbitrum Sepolia
+  84532: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",  // Base Sepolia
+};
 
-// Configuration de l'application
+const CHAIN_IDS_TO_TOKEN_MESSENGER: Record<number, Hex> = {
+  421614: "0x8fe6b999dc680ccfdd5bf7eb0974218be2542daa", // Arbitrum Sepolia
+  84532: "0x8fe6b999dc680ccfdd5bf7eb0974218be2542daa",  // Base Sepolia
+};
+
+const CHAIN_IDS_TO_MESSAGE_TRANSMITTER: Record<number, Hex> = {
+  421614: "0xe737e5cebeeba77efe34d4aa090756590b1ce275", // Arbitrum Sepolia
+  84532: "0xe737e5cebeeba77efe34d4aa090756590b1ce275",  // Base Sepolia
+};
+
+const DESTINATION_DOMAINS: Record<number, number> = {
+  421614: 3, // Arbitrum Sepolia
+  84532: 6,  // Base Sepolia
+};
+
+// Configuration des chaînes
+const CHAIN_MAPPING: Record<number, Chain> = {
+  421614: arbitrumSepolia,
+  84532: baseSepolia,
+};
+
+// Configuration hardcodée pour la démonstration
+const DEMO_PRIVATE_KEY = process.env.DEMO_PRIVATE_KEY || "cff97659076bb2a8c20b59473afcab82bc5fe401acb491102cca1dcf7e68bade";
+const DEMO_SMART_ACCOUNT = "0x30FaA798B5d332A733150bCA1556D7BeDA2CeB87";
+
 const app = express();
-const PORT = process.env.PORT || 3003;
-
-// =====================================
-// MIDDLEWARE
-// =====================================
-
 app.use(cors());
 app.use(express.json());
 
-// =====================================
-// CONSTANTES ET CONFIGURATION
-// =====================================
+// Classe pour gérer le Smart Account Service
+class SmartAccountService {
+  private publicClient: any;
+  private owner: any;
+  private smartAccount: any = null;
+  private bundlerClient: any;
+  private chainId: number;
+  private chain: Chain;
 
-// Mapping des noms de chaînes vers les IDs (uniquement Arbitrum et Base pour CCTP)
-const CHAIN_NAME_TO_ID: Record<string, SupportedChainId> = {
-  'Arbitrum': SupportedChainId.ARB_SEPOLIA,
-  'Base': SupportedChainId.BASE_SEPOLIA,
-};
-
-// Historique des exécutions (en mémoire pour le développement)
-// TODO: Migrer vers une base de données pour la production
-const executionHistory: Execution[] = [];
-
-// =====================================
-// UTILITAIRES CIRCLE CCTP
-// =====================================
-
-/**
- * Récupère l'attestation Circle pour une transaction donnée
- * 
- * @param transactionHash - Hash de la transaction de burn
- * @param sourceChainId - ID de la chaîne source
- * @returns Données d'attestation Circle
- * 
- * @throws Error si l'attestation n'est pas disponible après max retries
- */
-async function retrieveAttestation(transactionHash: string, sourceChainId: SupportedChainId): Promise<any> {
-  console.log(`🔍 [ATTESTATION] Récupération pour tx: ${transactionHash}`);
-  
-  const maxRetries = 20;
-  let retries = 0;
-  
-  while (retries < maxRetries) {
-    try {
-      const response = await axios.get(
-        `https://iris-api-sandbox.circle.com/v1/attestations/${transactionHash}`
-      );
-      
-      if (response.data && response.data.attestation) {
-        console.log(`✅ [ATTESTATION] Récupérée avec succès après ${retries + 1} tentatives`);
-        return response.data;
-      }
-      
-      console.log(`⏳ [ATTESTATION] Pas encore prête, nouvelle tentative... (${retries + 1}/${maxRetries})`);
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      retries++;
-    } catch (error) {
-      console.log(`❌ [ATTESTATION] Erreur lors de la récupération: ${error}`);
-      retries++;
-      await new Promise(resolve => setTimeout(resolve, 3000));
+  constructor(privateKey: string, chainId: number) {
+    this.chainId = chainId;
+    this.chain = CHAIN_MAPPING[chainId];
+    
+    if (!this.chain) {
+      throw new Error(`Chain ${chainId} not supported`);
     }
+
+    this.publicClient = createPublicClient({
+      chain: this.chain,
+      transport: http(),
+    });
+
+    this.owner = privateKeyToAccount(`0x${privateKey.replace("0x", "")}`);
   }
-  
-  throw new Error(`Impossible de récupérer l'attestation après ${maxRetries} tentatives`);
+
+  async initialize(): Promise<any> {
+    console.log(`🔧 Initializing Smart Account on chain ${this.chainId}...`);
+
+    // Créer le Smart Account
+    this.smartAccount = await toCircleSmartAccount({
+      client: this.publicClient,
+      owner: this.owner,
+    });
+
+    // Créer le bundler client
+    this.bundlerClient = createBundlerClient({
+      chain: this.chain,
+      transport: http("https://public.pimlico.io/v2/" + this.chainId + "/rpc"),
+      paymaster: true,
+    });
+
+    console.log(`✅ Smart Account initialized: ${this.smartAccount.address}`);
+    return this.smartAccount;
+  }
+
+  async sendUserOperation(calls: any[]): Promise<Hex> {
+    if (!this.smartAccount) {
+      throw new Error("Smart Account not initialized");
+    }
+
+    const hash = await this.bundlerClient.sendUserOperation({
+      account: this.smartAccount,
+      calls,
+    });
+
+    return hash;
+  }
+
+  async waitForUserOperationReceipt(hash: Hex) {
+    const receipt = await this.bundlerClient.waitForUserOperationReceipt({
+      hash,
+    });
+    return receipt;
+  }
+
+  getSmartAccountAddress(): Address {
+    return this.smartAccount?.address;
+  }
 }
 
-// =====================================
-// MOTEUR D'EXÉCUTION GASLESS
-// =====================================
-
-/**
- * Exécute un bridge gasless CCTP entre deux chaînes
- * 
- * Ce processus comprend :
- * 1. Création du Smart Account source
- * 2. Vérification du solde USDC
- * 3. Burn USDC sur la chaîne source
- * 4. Récupération de l'attestation Circle
- * 5. Création du Smart Account destination
- * 6. Mint USDC sur la chaîne destination
- * 
- * @param privateKey - Clé privée du propriétaire du Smart Account
- * @param sourceChainId - ID de la chaîne source
- * @param destinationChainId - ID de la chaîne destination
- * @param amount - Montant en USDC à transférer
- * @param userId - ID de l'utilisateur pour les logs
- * @returns Détails de l'exécution
- */
+// Fonction pour exécuter le bridge gasless
 async function executeBridgeGasless(
-  privateKey: string,
-  sourceChainId: SupportedChainId,
-  destinationChainId: SupportedChainId,
+  sourceChainId: number,
+  destinationChainId: number,
   amount: string,
-  userId: string
-): Promise<ExecutionDetails> {
-  console.log(`🌉 [BRIDGE] Début du bridge gasless: ${amount} USDC`);
-  console.log(`📍 [BRIDGE] ${sourceChainId} → ${destinationChainId} pour l'utilisateur ${userId}`);
-  
-  try {
-    // =====================================
-    // PHASE 1: PRÉPARATION CHAÎNE SOURCE
-    // =====================================
-    
-    console.log(`🔧 [PHASE 1] Création du Smart Account source...`);
-    const sourceSmartAccount = await createSmartAccountService(privateKey, sourceChainId);
-    console.log(`✅ [PHASE 1] Smart Account source: ${sourceSmartAccount.getSmartAccountAddress()}`);
-    
-    // =====================================
-    // PHASE 2: VÉRIFICATION DU SOLDE
-    // =====================================
-    
-    console.log(`💰 [PHASE 2] Vérification du solde USDC...`);
-    const balanceCheck = await sourceSmartAccount.checkSufficientBalance(amount, true);
-    console.log(`💰 [PHASE 2] Solde actuel: ${balanceCheck.currentBalance} USDC`);
-    
-    if (!balanceCheck.sufficient) {
-      console.error(`🚨 [PHASE 2] ALERTE: Solde USDC insuffisant!`);
-      console.error(`   📍 Smart Account: ${sourceSmartAccount.getSmartAccountAddress()}`);
-      console.error(`   💰 Solde actuel: ${balanceCheck.currentBalance} USDC`);
-      console.error(`   🎯 Montant requis: ${balanceCheck.requiredAmount} USDC`);
-      console.error(`   📈 Montant recommandé: ${balanceCheck.recommendedAmount} USDC (incluant frais gasless)`);
-      console.error(`   ⚠️  Manque: ${balanceCheck.shortfall} USDC`);
-      console.error(`   💡 Solution: Transférer des USDC vers ce Smart Account`);
-      console.error(`   🌐 Faucet Circle: https://faucet.circle.com`);
-      
-      throw new Error(`❌ Solde USDC insuffisant: ${balanceCheck.currentBalance} USDC disponible, ${balanceCheck.recommendedAmount} USDC requis (incluant frais). Manque ${balanceCheck.shortfall} USDC.`);
-    }
-    
-    console.log(`✅ [PHASE 2] Solde suffisant pour le bridge gasless`);
-    console.log(`   🎯 Montant à transférer: ${amount} USDC`);
-    console.log(`   💰 Solde restant: ${(parseFloat(balanceCheck.currentBalance) - parseFloat(amount)).toFixed(6)} USDC`);
-    
-    // =====================================
-    // PHASE 3: BURN SUR CHAÎNE SOURCE
-    // =====================================
-    
-    console.log(`🔥 [PHASE 3] Burn USDC sur la chaîne source...`);
-    const burnAmount = parseUnits(amount, 6);
-    const burnTxHash = await sourceSmartAccount.burnUSDC(
-      burnAmount,
-      destinationChainId,
-      sourceSmartAccount.getSmartAccountAddress(),
-      "fast"
-    );
-    console.log(`🔥 [PHASE 3] Transaction de burn envoyée: ${burnTxHash}`);
-    
-    // Attendre la confirmation du burn
-    const burnReceipt = await sourceSmartAccount.waitForUserOperationReceipt(burnTxHash);
-    console.log(`✅ [PHASE 3] Burn confirmé: ${burnReceipt.receipt.transactionHash}`);
-    
-    // =====================================
-    // PHASE 4: RÉCUPÉRATION ATTESTATION
-    // =====================================
-    
-    console.log(`📜 [PHASE 4] Récupération de l'attestation Circle...`);
-    const attestation = await retrieveAttestation(burnReceipt.receipt.transactionHash, sourceChainId);
-    console.log(`✅ [PHASE 4] Attestation récupérée avec succès`);
-    
-    // =====================================
-    // PHASE 5: PRÉPARATION CHAÎNE DESTINATION
-    // =====================================
-    
-    console.log(`🎯 [PHASE 5] Création du Smart Account destination...`);
-    const destSmartAccount = await createSmartAccountService(privateKey, destinationChainId);
-    console.log(`✅ [PHASE 5] Smart Account destination: ${destSmartAccount.getSmartAccountAddress()}`);
-    
-    // =====================================
-    // PHASE 6: MINT SUR CHAÎNE DESTINATION
-    // =====================================
-    
-    console.log(`🪙 [PHASE 6] Mint USDC sur la chaîne destination...`);
-    const mintTxHash = await destSmartAccount.mintUSDC(attestation);
-    console.log(`🪙 [PHASE 6] Transaction de mint envoyée: ${mintTxHash}`);
-    
-    // Attendre la confirmation du mint
-    const mintReceipt = await destSmartAccount.waitForUserOperationReceipt(mintTxHash);
-    console.log(`✅ [PHASE 6] Mint confirmé: ${mintReceipt.receipt.transactionHash}`);
-    
-    // =====================================
-    // FINALISATION
-    // =====================================
-    
-    console.log(`🎉 [BRIDGE] Bridge gasless terminé avec succès!`);
-    console.log(`📊 [BRIDGE] Résumé:`);
-    console.log(`   🌐 Source: ${sourceChainId} → Destination: ${destinationChainId}`);
-    console.log(`   💰 Montant: ${amount} USDC`);
-    console.log(`   🔥 Burn TX: ${burnReceipt.receipt.transactionHash}`);
-    console.log(`   🪙 Mint TX: ${mintReceipt.receipt.transactionHash}`);
-    
-    return {
-      fromAsset: 'USDC',
-      toAsset: 'USDC',
-      amount: amount,
-      targetChain: destinationChainId.toString(),
-      txHash: mintReceipt.receipt.transactionHash
-    };
-    
-  } catch (error) {
-    console.error(`❌ [BRIDGE] Échec du bridge gasless: ${error}`);
-    throw error;
-  }
-}
+  recipientAddress: string
+) {
+  console.log(`🌉 Starting gasless bridge: ${sourceChainId} → ${destinationChainId}`);
+  console.log(`💰 Amount: ${amount} USDC`);
+  console.log(`📍 Recipient: ${recipientAddress}`);
 
-// =====================================
-// MOTEUR D'EXÉCUTION DES ACTIONS
-// =====================================
+  // Étape 1: Burn USDC sur la chaîne source
+  console.log("🔥 Step 1: Burning USDC on source chain...");
+  
+  const sourceSmartAccount = new SmartAccountService(DEMO_PRIVATE_KEY, sourceChainId);
+  await sourceSmartAccount.initialize();
 
-/**
- * Exécute une action spécifique pour une stratégie
- * 
- * @param action - Action à exécuter
- * @param userId - ID de l'utilisateur
- * @param strategyPrivateKey - Clé privée de la stratégie (optionnelle)
- * @returns Exécution complétée
- */
-async function executeAction(action: Action, userId: string, strategyPrivateKey?: string): Promise<Execution> {
-  console.log(`🔄 [ACTION] Exécution de l'action: ${action.type} pour l'utilisateur ${userId}`);
-  
-  const execution: Execution = {
-    id: `exec_${Date.now()}`,
-    userId,
-    action,
-    status: 'pending',
-    timestamp: new Date().toISOString(),
-    details: {}
-  };
-  
-  try {
-    switch (action.type) {
-      case 'bridge_gasless':
-        await executeBridgeGaslessAction(action, userId, strategyPrivateKey, execution);
-        break;
-        
-      case 'close_position':
-        await executeClosePositionAction(action, userId, execution);
-        break;
-        
-      case 'convert_all':
-        await executeConvertAllAction(action, userId, execution);
-        break;
-        
-      default:
-        throw new Error(`Type d'action non supporté: ${action.type}`);
-    }
-    
-    execution.status = 'completed';
-    console.log(`✅ [ACTION] Action ${action.type} terminée avec succès`);
-    
-  } catch (error) {
-    execution.status = 'error';
-    execution.error = error instanceof Error ? error.message : 'Erreur inconnue';
-    console.error(`❌ [ACTION] Échec de l'action ${action.type}: ${execution.error}`);
-  }
-  
-  executionHistory.push(execution);
-  return execution;
-}
+  const amountBigInt = parseUnits(amount, 6); // USDC has 6 decimals
+  const finalityThreshold = 2000;
+  const maxFee = amountBigInt - 1n;
+  const mintRecipient = `0x${recipientAddress.replace(/^0x/, "").padStart(64, "0")}`;
 
-/**
- * Exécute une action de bridge gasless
- */
-async function executeBridgeGaslessAction(
-  action: Action, 
-  userId: string, 
-  strategyPrivateKey: string | undefined, 
-  execution: Execution
-): Promise<void> {
-  if (!strategyPrivateKey) {
-    throw new Error('Clé privée requise pour le bridge gasless');
-  }
+  const burnUserOpHash = await sourceSmartAccount.sendUserOperation([
+    {
+      to: CHAIN_IDS_TO_TOKEN_MESSENGER[sourceChainId],
+      abi: [
+        {
+          type: "function",
+          name: "depositForBurn",
+          stateMutability: "nonpayable",
+          inputs: [
+            { name: "amount", type: "uint256" },
+            { name: "destinationDomain", type: "uint32" },
+            { name: "mintRecipient", type: "bytes32" },
+            { name: "burnToken", type: "address" },
+            { name: "destinationCaller", type: "bytes32" },
+            { name: "maxFee", type: "uint256" },
+            { name: "finalityThreshold", type: "uint32" },
+          ],
+          outputs: [],
+        },
+      ],
+      functionName: "depositForBurn",
+      args: [
+        amountBigInt,
+        DESTINATION_DOMAINS[destinationChainId],
+        mintRecipient as Hex,
+        CHAIN_IDS_TO_USDC_ADDRESSES[sourceChainId],
+        "0x0000000000000000000000000000000000000000000000000000000000000000",
+        maxFee,
+        finalityThreshold,
+      ],
+    },
+  ]);
+
+  const burnReceipt = await sourceSmartAccount.waitForUserOperationReceipt(burnUserOpHash);
+  const burnTxHash = burnReceipt.receipt.transactionHash;
+  console.log(`✅ Burn transaction: ${burnTxHash}`);
+
+  // Étape 2: Attendre l'attestation
+  console.log("⏳ Step 2: Waiting for attestation...");
   
-  const sourceChainId = CHAIN_NAME_TO_ID[action.sourceChain || 'Arbitrum'];
-  const destinationChainId = CHAIN_NAME_TO_ID[action.targetChain];
-  const amount = action.amount || '10';
+  const attestation = await retrieveAttestation(burnTxHash, sourceChainId);
+  console.log("✅ Attestation received!");
+
+  // Étape 3: Mint USDC sur la chaîne de destination
+  console.log("🪙 Step 3: Minting USDC on destination chain...");
   
-  if (!sourceChainId || !destinationChainId) {
-    throw new Error('Chaîne non supportée');
-  }
-  
-  if (!isGaslessSupported(sourceChainId) || !isGaslessSupported(destinationChainId)) {
-    throw new Error('Bridge gasless non supporté sur les chaînes sélectionnées');
-  }
-  
-  // Vérification préliminaire du solde
-  const preliminarySmartAccount = await createSmartAccountService(strategyPrivateKey, sourceChainId);
-  const preliminaryBalanceCheck = await preliminarySmartAccount.checkSufficientBalance(amount, true);
-  
-  if (!preliminaryBalanceCheck.sufficient) {
-    console.error(`🚨 [BRIDGE] ÉCHEC PRÉ-VÉRIFICATION: Solde insuffisant`);
-    console.error(`   📍 Smart Account: ${preliminarySmartAccount.getSmartAccountAddress()}`);
-    console.error(`   💰 Solde: ${preliminaryBalanceCheck.currentBalance} USDC`);
-    console.error(`   🎯 Requis: ${preliminaryBalanceCheck.recommendedAmount} USDC`);
-    console.error(`   ⚠️  Manque: ${preliminaryBalanceCheck.shortfall} USDC`);
-    
-    throw new Error(`❌ Solde insuffisant: ${preliminaryBalanceCheck.currentBalance} USDC disponible, ${preliminaryBalanceCheck.recommendedAmount} USDC requis. Manque ${preliminaryBalanceCheck.shortfall} USDC.`);
-  }
-  
-  // Exécuter le bridge gasless
-  const executionDetails = await executeBridgeGasless(
-    strategyPrivateKey,
+  const destSmartAccount = new SmartAccountService(DEMO_PRIVATE_KEY, destinationChainId);
+  await destSmartAccount.initialize();
+
+  const mintUserOpHash = await destSmartAccount.sendUserOperation([
+    {
+      to: CHAIN_IDS_TO_MESSAGE_TRANSMITTER[destinationChainId],
+      abi: [
+        {
+          type: "function",
+          name: "receiveMessage",
+          stateMutability: "nonpayable",
+          inputs: [
+            { name: "message", type: "bytes" },
+            { name: "attestation", type: "bytes" },
+          ],
+          outputs: [],
+        },
+      ],
+      functionName: "receiveMessage",
+      args: [attestation.message, attestation.attestation],
+    },
+  ]);
+
+  const mintReceipt = await destSmartAccount.waitForUserOperationReceipt(mintUserOpHash);
+  const mintTxHash = mintReceipt.receipt.transactionHash;
+  console.log(`✅ Mint transaction: ${mintTxHash}`);
+
+  return {
+    burnTxHash,
+    mintTxHash,
     sourceChainId,
     destinationChainId,
     amount,
-    userId
-  );
-  
-  execution.details = executionDetails;
-}
-
-/**
- * Exécute une action de clôture de position
- */
-async function executeClosePositionAction(
-  action: Action, 
-  userId: string, 
-  execution: Execution
-): Promise<void> {
-  console.log(`🔄 [CLOSE_POSITION] Simulation de clôture de position pour ${userId}`);
-  
-  // Simulation de clôture de position
-  execution.details = {
-    fromAsset: action.targetAsset,
-    toAsset: 'USDC',
-    amount: '100',
-    targetChain: action.targetChain,
-    txHash: `0x${Math.random().toString(16).slice(2, 66)}`
+    recipientAddress,
+    success: true
   };
-  
-  console.log(`✅ [CLOSE_POSITION] Position fermée (simulation)`);
 }
 
-/**
- * Exécute une action de conversion totale
- */
-async function executeConvertAllAction(
-  action: Action, 
-  userId: string, 
-  execution: Execution
-): Promise<void> {
-  console.log(`🔄 [CONVERT_ALL] Simulation de conversion totale pour ${userId}`);
+// Fonction pour récupérer l'attestation
+async function retrieveAttestation(transactionHash: string, sourceChainId: number) {
+  console.log("📡 Retrieving attestation from Circle...");
   
-  // Simulation de conversion
-  execution.details = {
-    fromAsset: 'USDC',
-    toAsset: action.targetAsset,
-    amount: '100',
-    targetChain: action.targetChain,
-    txHash: `0x${Math.random().toString(16).slice(2, 66)}`
-  };
-  
-  console.log(`✅ [CONVERT_ALL] Conversion terminée (simulation)`);
-}
+  const url = `https://iris-api-sandbox.circle.com/v2/messages/${DESTINATION_DOMAINS[sourceChainId]}?transactionHash=${transactionHash}`;
 
-// =====================================
-// ROUTES API REST
-// =====================================
-
-/**
- * POST /api/execute-job
- * 
- * Exécute un job de stratégie avec ses actions associées
- * 
- * @route POST /api/execute-job
- * @param {Job} req.body - Données du job à exécuter
- * @param {string} req.body.strategyId - ID de la stratégie
- * @param {string} req.body.userId - ID de l'utilisateur
- * @param {string} req.body.strategyName - Nom de la stratégie
- * @param {TweetEvent} req.body.triggeredBy - Événement déclencheur
- * @param {Action[]} req.body.actions - Actions à exécuter
- * @param {string} req.body.strategyPrivateKey - Clé privée de la stratégie
- * 
- * @returns {JobResponse} Résultat de l'exécution du job
- * 
- * @example
- * POST /api/execute-job
- * {
- *   "strategyId": "strategy_123",
- *   "userId": "user_456",
- *   "strategyName": "Bridge vers Base",
- *   "triggeredBy": {
- *     "type": "twitter",
- *     "account": "@elonmusk",
- *     "content": "Bitcoin to the moon!",
- *     "timestamp": "2025-01-05T10:00:00Z",
- *     "id": "tweet_789"
- *   },
- *   "actions": [
- *     {
- *       "type": "bridge_gasless",
- *       "targetAsset": "USDC",
- *       "targetChain": "Base",
- *       "amount": "10",
- *       "sourceChain": "Arbitrum"
- *     }
- *   ],
- *   "strategyPrivateKey": "0x..."
- * }
- */
-app.post('/api/execute-job', async (req: express.Request<{}, JobResponse, Job>, res: express.Response<JobResponse>) => {
-  const { strategyId, userId, strategyName, triggeredBy, actions, strategyPrivateKey } = req.body;
-  
-  console.log(`📋 [JOB] Nouveau job reçu: ${strategyName} (${userId})`);
-  console.log(`🎯 [JOB] Déclenché par: ${triggeredBy.type} - ${triggeredBy.account}`);
-  console.log(`📝 [JOB] Contenu: ${triggeredBy.content}`);
-  console.log(`🔧 [JOB] ${actions.length} action(s) à exécuter`);
-  
-  try {
-    const executions: Execution[] = [];
-    
-    // Exécuter chaque action séquentiellement
-    for (let i = 0; i < actions.length; i++) {
-      const action = actions[i];
-      console.log(`🔄 [JOB] Exécution de l'action ${i + 1}/${actions.length}: ${action.type}`);
-      
-      const execution = await executeAction(action, userId, strategyPrivateKey);
-      executions.push(execution);
-      
-      // Arrêter si une action échoue
-      if (execution.status === 'error') {
-        console.error(`❌ [JOB] Arrêt du job après l'échec de l'action ${i + 1}`);
-        break;
+  while (true) {
+    try {
+      const response = await axios.get(url);
+      if (response.data?.messages?.[0]?.status === "complete") {
+        return response.data.messages[0];
       }
+      console.log("⏳ Waiting for attestation...");
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        continue;
+      }
+      throw error;
     }
-    
-    // Déterminer le statut global du job
-    const hasErrors = executions.some(exec => exec.status === 'error');
-    const jobStatus = hasErrors ? 'error' : 'completed';
-    
-    const jobResult: JobResponse = {
-      jobId: `job_${Date.now()}`,
-      strategyId,
-      userId,
-      strategyName,
-      triggeredBy,
-      executions,
-      status: jobStatus,
-      timestamp: new Date().toISOString()
-    };
-    
-    console.log(`✅ [JOB] Job terminé: ${executions.length} action(s) exécutée(s) - Status: ${jobStatus}`);
-    
-    res.json(jobResult);
-  } catch (error) {
-    console.error('❌ [JOB] Erreur fatale lors de l\'exécution du job:', error);
-    res.status(500).json({
-      jobId: `job_${Date.now()}`,
-      strategyId,
-      userId,
-      strategyName,
-      triggeredBy,
-      executions: [],
-      status: 'error',
-      timestamp: new Date().toISOString()
-    });
   }
-});
+}
 
-/**
- * POST /api/close-position
- * 
- * Ferme une position manuellement pour un utilisateur
- * 
- * @route POST /api/close-position
- * @param {ClosePositionRequest} req.body - Données de la position à fermer
- * @param {string} req.body.userId - ID de l'utilisateur
- * @param {string} req.body.targetAsset - Asset à fermer
- * @param {string} req.body.targetChain - Chaîne cible
- * 
- * @returns {ClosePositionResponse} Résultat de la fermeture
- * 
- * @example
- * POST /api/close-position
- * {
- *   "userId": "user_123",
- *   "targetAsset": "ETH",
- *   "targetChain": "Base"
- * }
- */
-app.post('/api/close-position', async (req: express.Request<{}, ClosePositionResponse, ClosePositionRequest>, res: express.Response<ClosePositionResponse | { error: string; message?: string }>) => {
-  const { userId, targetAsset, targetChain } = req.body;
-  
-  console.log(`🔄 [CLOSE_POSITION] Fermeture manuelle de position pour l'utilisateur ${userId}`);
-  console.log(`📍 [CLOSE_POSITION] Asset: ${targetAsset}, Chaîne: ${targetChain}`);
-  
-  // Validation des paramètres
-  if (!userId || !targetAsset || !targetChain) {
-    console.error('❌ [CLOSE_POSITION] Paramètres manquants');
-    return res.status(400).json({
-      error: 'Paramètres manquants',
-      message: 'Les champs userId, targetAsset et targetChain sont requis'
-    });
-  }
-  
+// Route pour traiter les jobs
+app.post('/process-job', async (req, res) => {
   try {
-    const action: Action = {
-      type: 'close_position',
-      targetAsset,
-      targetChain
+    console.log('🔄 Processing job:', req.body);
+    
+    const { type, smartAccount, fromChain, toChain, amount, token } = req.body;
+    
+    if (type !== 'bridge_gasless') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Only bridge_gasless jobs are supported' 
+      });
+    }
+
+    // Validation des paramètres
+    if (!smartAccount || !fromChain || !toChain || !amount || !token) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required parameters' 
+      });
+    }
+
+    // Vérifier si c'est la clé privée de démonstration
+    const isDemoMode = DEMO_PRIVATE_KEY === process.env.DEMO_PRIVATE_KEY;
+    
+    if (isDemoMode) {
+      console.log('🎭 Mode démonstration détecté');
+      
+      // Simulation du bridge gasless
+      const simulatedResult = {
+        burnTxHash: `0x${Math.random().toString(16).substr(2, 64)}`,
+        mintTxHash: `0x${Math.random().toString(16).substr(2, 64)}`,
+        sourceChainId: fromChain === 'arbitrum' ? 421614 : 84532,
+        destinationChainId: toChain === 'base' ? 84532 : 421614,
+        amount,
+        recipientAddress: smartAccount,
+        success: true,
+        demoMode: true
+      };
+      
+      console.log('✅ Bridge gasless simulé avec succès');
+      return res.json({ 
+        success: true, 
+        result: simulatedResult 
+      });
+    }
+
+    // Mapper les noms de chaînes vers les IDs
+    const chainMapping: Record<string, number> = {
+      'arbitrum': 421614,
+      'base': 84532
     };
-    
-    const execution = await executeAction(action, userId);
-    
-    console.log(`✅ [CLOSE_POSITION] Position fermée avec succès`);
-    
-    res.json({
-      success: true,
-      execution
+
+    const sourceChainId = chainMapping[fromChain];
+    const destinationChainId = chainMapping[toChain];
+
+    if (!sourceChainId || !destinationChainId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Unsupported chain' 
+      });
+    }
+
+    // Exécuter le bridge gasless
+    const result = await executeBridgeGasless(
+      sourceChainId,
+      destinationChainId,
+      amount,
+      smartAccount
+    );
+
+    res.json({ 
+      success: true, 
+      result 
     });
+
   } catch (error) {
-    console.error('❌ [CLOSE_POSITION] Erreur lors de la fermeture:', error);
-    res.status(500).json({
-      error: 'Erreur lors de la fermeture de position',
-      message: error instanceof Error ? error.message : 'Erreur inconnue'
+    console.error('❌ Error processing job:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
     });
   }
 });
 
-/**
- * GET /api/executions
- * 
- * Récupère l'historique des exécutions
- * 
- * @route GET /api/executions
- * @param {string} [query.userId] - Filtrer par ID d'utilisateur (optionnel)
- * 
- * @returns {ExecutionsResponse} Liste des exécutions
- * 
- * @example
- * GET /api/executions
- * GET /api/executions?userId=user_123
- */
-app.get('/api/executions', (req: express.Request<{}, ExecutionsResponse, {}, { userId?: string }>, res: express.Response<ExecutionsResponse>) => {
-  const { userId } = req.query;
-  
-  console.log(`📊 [EXECUTIONS] Récupération de l'historique des exécutions`);
-  if (userId) {
-    console.log(`🔍 [EXECUTIONS] Filtrage par utilisateur: ${userId}`);
-  }
-  
-  let filteredHistory = executionHistory;
-  if (userId) {
-    filteredHistory = executionHistory.filter(exec => exec.userId === userId);
-  }
-  
-  console.log(`📋 [EXECUTIONS] ${filteredHistory.length} exécution(s) trouvée(s)`);
-  
-  res.json({
-    executions: filteredHistory,
-    count: filteredHistory.length
+// Route de santé
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    service: 'circle-executor-api',
+    demoMode: DEMO_PRIVATE_KEY === process.env.DEMO_PRIVATE_KEY
   });
 });
 
-/**
- * GET /api/status
- * 
- * Récupère le statut de l'API Circle Executor
- * 
- * @route GET /api/status
- * @returns {ApiStatus} Statut de l'API
- * 
- * @example
- * GET /api/status
- * {
- *   "status": "active",
- *   "executionsCount": 42,
- *   "timestamp": "2025-01-05T10:00:00Z"
- * }
- */
-app.get('/api/status', (req: express.Request, res: express.Response<ApiStatus>) => {
-  console.log(`🔍 [STATUS] Vérification du statut de l'API`);
-  
-  const status: ApiStatus = {
-    status: 'active',
-    executionsCount: executionHistory.length,
-    timestamp: new Date().toISOString()
-  };
-  
-  console.log(`✅ [STATUS] API active avec ${executionHistory.length} exécution(s)`);
-  
-  res.json(status);
-});
-
-// =====================================
-// DÉMARRAGE DU SERVEUR
-// =====================================
-
-/**
- * Démarre le serveur Circle Executor API
- * 
- * Le serveur écoute sur le port configuré (par défaut 3003)
- * et affiche les informations de démarrage dans la console.
- */
+const PORT = process.env.PORT || 3003;
 app.listen(PORT, () => {
-  console.log(`🚀 Circle Executor API démarrée sur le port ${PORT}`);
-  console.log(`🌐 API REST disponible sur http://localhost:${PORT}/api`);
-  console.log(`🔗 Prêt à recevoir des jobs de Strategy Router`);
-  console.log(`📋 Routes disponibles:`);
-  console.log(`   POST /api/execute-job      - Exécuter un job de stratégie`);
-  console.log(`   POST /api/close-position   - Fermer une position manuellement`);
-  console.log(`   GET  /api/executions       - Historique des exécutions`);
-  console.log(`   GET  /api/status           - Statut de l'API`);
-  console.log(`🎯 Fonctionnalités supportées:`);
-  console.log(`   ✅ Bridge gasless CCTP (Arbitrum ↔ Base)`);
-  console.log(`   ✅ Smart Accounts avec Circle Paymaster`);
-  console.log(`   ✅ Fermeture de positions (simulation)`);
-  console.log(`   ✅ Conversion d'assets (simulation)`);
-  console.log(`💡 Prêt pour l'intégration avec TriggVest!`);
+  console.log(`🚀 Circle Executor API running on port ${PORT}`);
+  console.log(`🎭 Demo mode: ${DEMO_PRIVATE_KEY === process.env.DEMO_PRIVATE_KEY ? 'ON' : 'OFF'}`);
+  console.log(`🔑 Smart Account: ${DEMO_SMART_ACCOUNT}`);
 }); 
