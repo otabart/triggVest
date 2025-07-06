@@ -42,6 +42,42 @@ export interface Execution {
   timestamp: string;
   details: ExecutionDetails;
   error?: string;
+  errorCode?: ExecutionErrorCode;
+  errorDetails?: ExecutionErrorDetails;
+}
+
+// =====================================
+// TYPES D'ERREUR AMÉLIORÉS
+// =====================================
+
+export enum ExecutionErrorCode {
+  INSUFFICIENT_BALANCE = 'INSUFFICIENT_BALANCE',
+  UNSUPPORTED_CHAIN = 'UNSUPPORTED_CHAIN',
+  GASLESS_NOT_SUPPORTED = 'GASLESS_NOT_SUPPORTED',
+  PRIVATE_KEY_MISSING = 'PRIVATE_KEY_MISSING',
+  ATTESTATION_FAILED = 'ATTESTATION_FAILED',
+  BURN_FAILED = 'BURN_FAILED',
+  MINT_FAILED = 'MINT_FAILED',
+  SMART_ACCOUNT_ERROR = 'SMART_ACCOUNT_ERROR',
+  NETWORK_ERROR = 'NETWORK_ERROR',
+  UNKNOWN_ERROR = 'UNKNOWN_ERROR'
+}
+
+export interface ExecutionErrorDetails {
+  code: ExecutionErrorCode;
+  message: string;
+  details?: {
+    currentBalance?: string;
+    requiredAmount?: string;
+    shortfall?: string;
+    supportedChains?: string[];
+    txHash?: string;
+    attestationRetries?: number;
+    smartAccountAddress?: string;
+  };
+  timestamp: string;
+  actionType: string;
+  userId: string;
 }
 
 export interface JobResponse {
@@ -53,6 +89,11 @@ export interface JobResponse {
   executions: Execution[];
   status: 'completed' | 'error' | 'pending';
   timestamp: string;
+  errorSummary?: {
+    totalErrors: number;
+    errorCodes: ExecutionErrorCode[];
+    criticalErrors: boolean;
+  };
 }
 
 export interface ClosePositionRequest {
@@ -69,10 +110,21 @@ export interface ClosePositionResponse {
 export interface ExecutionsResponse {
   executions: Execution[];
   count: number;
+  errorStats?: {
+    totalErrors: number;
+    errorsByCode: Record<ExecutionErrorCode, number>;
+    successRate: number;
+  };
 }
 
 export interface ApiStatus {
   status: 'active' | 'inactive';
   executionsCount: number;
   timestamp: string;
+  errorRate?: number;
+  lastError?: {
+    code: ExecutionErrorCode;
+    timestamp: string;
+    count: number;
+  };
 } 
