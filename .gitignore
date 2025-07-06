@@ -1,0 +1,6 @@
+node_modules
+apps/circle-executor-api/dist/*
+*/dist/*
+.env
+apps/strategy-router-api/dist/*
+apps/trigger-api/dist/*
