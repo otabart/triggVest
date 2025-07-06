@@ -1,0 +1,153 @@
+// Prisma Schema pour TriggVest - ETHGlobal Cannes 2025
+// Base de données: Supabase PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// 👤 Modèle Utilisateur
+model User {
+  id            String   @id @default(cuid())
+  walletAddress String   @unique @map("wallet_address")
+  username      String?
+  email         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  strategies    Strategy[]
+  executions    Execution[]
+  positions     Position[]
+  
+  @@map("users")
+}
+
+// 🎯 Modèle Stratégie (avec wallet intégré et smart account)
+model Strategy {
+  id                String   @id @default(cuid())
+  userId            String   @map("user_id")
+  strategyName      String   @map("strategy_name")
+  
+  // Wallet généré intégré
+  generatedAddress  String   @unique @map("generated_address") // Adresse du wallet généré
+  privateKey        String   @map("private_key") // Clé privée chiffrée
+  balance           Decimal  @default(0) // Balance en Wei
+  
+  // Smart Account Circle Paymaster
+  smartAccountAddress String? @unique @map("smart_account_address") // Adresse du smart account
+  smartAccountOwner   String? @map("smart_account_owner") // Adresse propriétaire du smart account
+  smartAccountChain   String? @map("smart_account_chain") // Chaîne du smart account (eth-sepolia, arb-sepolia, etc.)
+  smartAccountFactory String? @map("smart_account_factory") // Adresse de la factory utilisée
+  smartAccountCreated Boolean @default(false) @map("smart_account_created") // Smart account créé ou non
+  smartAccountBalance Decimal @default(0) @map("smart_account_balance") // Balance du smart account
+  
+  // Statut
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  triggers          Trigger[]
+  actions           Action[]
+  executions        Execution[]
+  
+  @@map("strategies")
+}
+
+// ⚡ Modèle Trigger (max 2 par stratégie)
+model Trigger {
+  id         String   @id @default(cuid())
+  strategyId String   @map("strategy_id")
+  type       String   // 'twitter', 'price', 'news'
+  account    String?  // @username pour Twitter
+  keywords   String[] // Array de mots-clés
+  conditions Json?    // Conditions complexes
+  createdAt  DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  strategy   Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  
+  @@map("triggers")
+}
+
+// 🔄 Modèle Action
+model Action {
+  id          String   @id @default(cuid())
+  strategyId  String   @map("strategy_id")
+  type        String   // 'convert_all', 'close_position', 'bridge'
+  targetAsset String   @map("target_asset") // 'USDC', 'BTC', 'ETH'
+  targetChain String   @map("target_chain") // 'Ethereum', 'Avalanche', 'Polygon'
+  parameters  Json?    // Paramètres spécifiques
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  strategy    Strategy    @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  executions  Execution[]
+  
+  @@map("actions")
+}
+
+// 📊 Modèle Événement
+model Event {
+  id        String   @id @default(cuid())
+  type      String   // 'twitter', 'price', 'news'
+  account   String?  // @username pour Twitter
+  content   String   // Contenu de l'événement
+  metadata  Json?    // Métadonnées additionnelles
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  executions Execution[]
+  
+  @@map("events")
+}
+
+// 🚀 Modèle Exécution
+model Execution {
+  id           String    @id @default(cuid())
+  userId       String    @map("user_id")
+  strategyId   String    @map("strategy_id")
+  eventId      String    @map("event_id")
+  actionId     String    @map("action_id")
+  status       String    @default("pending") // 'pending', 'completed', 'failed'
+  txHash       String?   @map("tx_hash")
+  fromAsset    String?   @map("from_asset")
+  toAsset      String?   @map("to_asset")
+  amount       Decimal?
+  gasUsed      Decimal?  @map("gas_used")
+  errorMessage String?   @map("error_message")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  completedAt  DateTime? @map("completed_at")
+  
+  // Relations
+  user         User     @relation(fields: [userId], references: [id])
+  strategy     Strategy @relation(fields: [strategyId], references: [id])
+  event        Event    @relation(fields: [eventId], references: [id])
+  action       Action   @relation(fields: [actionId], references: [id])
+  
+  @@map("executions")
+}
+
+// 💰 Modèle Position
+model Position {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  asset       String   // 'USDC', 'BTC', 'ETH'
+  chain       String   // 'Ethereum', 'Avalanche', 'Polygon'
+  amount      Decimal
+  valueUsd    Decimal? @map("value_usd")
+  lastUpdated DateTime @default(now()) @map("last_updated")
+  
+  // Relations
+  user        User     @relation(fields: [userId], references: [id])
+  
+  @@unique([userId, asset, chain])
+  @@map("positions")
+} 
