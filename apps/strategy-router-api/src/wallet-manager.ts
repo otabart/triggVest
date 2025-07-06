@@ -2,6 +2,7 @@
 import { ethers } from 'ethers';
 import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
+import { createSmartAccount, getSupportedChains } from './smart-account-manager';
 
 const prisma = new PrismaClient();
 
@@ -23,18 +24,24 @@ export interface GeneratedWallet {
  * Chiffrer une clé privée
  */
 function encryptPrivateKey(privateKey: string): string {
-  const cipher = crypto.createCipher('aes-256-cbc', ENCRYPTION_KEY);
+  const iv = crypto.randomBytes(16);
+  const key = crypto.createHash('sha256').update(ENCRYPTION_KEY).digest();
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
   let encrypted = cipher.update(privateKey, 'utf8', 'hex');
   encrypted += cipher.final('hex');
-  return encrypted;
+  return iv.toString('hex') + ':' + encrypted;
 }
 
 /**
  * Déchiffrer une clé privée
  */
 function decryptPrivateKey(encryptedKey: string): string {
-  const decipher = crypto.createDecipher('aes-256-cbc', ENCRYPTION_KEY);
-  let decrypted = decipher.update(encryptedKey, 'hex', 'utf8');
+  const parts = encryptedKey.split(':');
+  const iv = Buffer.from(parts[0], 'hex');
+  const encrypted = parts[1];
+  const key = crypto.createHash('sha256').update(ENCRYPTION_KEY).digest();
+  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
   decrypted += decipher.final('utf8');
   return decrypted;
 }
@@ -53,7 +60,7 @@ export function generateWallet(): GeneratedWallet {
 }
 
 /**
- * Créer une stratégie complète avec wallet intégré
+ * Créer une stratégie complète avec wallet intégré et smart account
  */
 export async function createStrategyWithWallet(data: {
   userWalletAddress: string;
@@ -68,6 +75,7 @@ export async function createStrategyWithWallet(data: {
     targetAsset: string;
     targetChain: string;
   }>;
+  smartAccountChain?: string; // Chaîne pour créer le smart account (optionnel)
 }): Promise<{
   success: boolean;
   message: string;
@@ -139,16 +147,55 @@ export async function createStrategyWithWallet(data: {
 
     console.log(`✅ Stratégie créée avec wallet: ${strategy.id} → ${wallet.address}`);
 
+    // Créer le smart account si une chaîne est spécifiée
+    let smartAccountInfo = null;
+    if (data.smartAccountChain) {
+      console.log(`🔄 Création du smart account sur ${data.smartAccountChain}...`);
+      
+      // Vérifier si la chaîne est supportée
+      const supportedChains = getSupportedChains();
+      if (!supportedChains.includes(data.smartAccountChain)) {
+        return {
+          success: false,
+          message: `Chaîne ${data.smartAccountChain} non supportée. Chaînes supportées: ${supportedChains.join(', ')}`
+        };
+      }
+
+      const smartAccountResult = await createSmartAccount({
+        chain: data.smartAccountChain,
+        ownerPrivateKey: wallet.privateKey,
+        strategyId: strategy.id
+      });
+
+      if (!smartAccountResult.success) {
+        // Supprimer la stratégie créée en cas d'erreur
+        await prisma.strategy.delete({
+          where: { id: strategy.id }
+        });
+        
+        return {
+          success: false,
+          message: `Erreur lors de la création du smart account: ${smartAccountResult.message}`
+        };
+      }
+
+      smartAccountInfo = smartAccountResult.smartAccount;
+      console.log(`✅ Smart account créé: ${smartAccountInfo?.address}`);
+    }
+
     return {
       success: true,
-      message: 'Stratégie et wallet créés avec succès',
+      message: data.smartAccountChain ? 
+        'Stratégie, wallet et smart account créés avec succès' : 
+        'Stratégie et wallet créés avec succès',
       strategy: {
         id: strategy.id,
         strategyName: strategy.strategyName,
         generatedAddress: strategy.generatedAddress,
         balance: strategy.balance.toString(),
         triggers: data.triggers,
-        actions: data.actions
+        actions: data.actions,
+        smartAccount: smartAccountInfo
       }
     };
 

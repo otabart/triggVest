@@ -28,7 +28,7 @@ model User {
   @@map("users")
 }
 
-// 🎯 Modèle Stratégie (avec wallet intégré)
+// 🎯 Modèle Stratégie (avec wallet intégré et smart account)
 model Strategy {
   id                String   @id @default(cuid())
   userId            String   @map("user_id")
@@ -38,6 +38,14 @@ model Strategy {
   generatedAddress  String   @unique @map("generated_address") // Adresse du wallet généré
   privateKey        String   @map("private_key") // Clé privée chiffrée
   balance           Decimal  @default(0) // Balance en Wei
+  
+  // Smart Account Circle Paymaster
+  smartAccountAddress String? @unique @map("smart_account_address") // Adresse du smart account
+  smartAccountOwner   String? @map("smart_account_owner") // Adresse propriétaire du smart account
+  smartAccountChain   String? @map("smart_account_chain") // Chaîne du smart account (eth-sepolia, arb-sepolia, etc.)
+  smartAccountFactory String? @map("smart_account_factory") // Adresse de la factory utilisée
+  smartAccountCreated Boolean @default(false) @map("smart_account_created") // Smart account créé ou non
+  smartAccountBalance Decimal @default(0) @map("smart_account_balance") // Balance du smart account
   
   // Statut
   isActive          Boolean  @default(true) @map("is_active")
