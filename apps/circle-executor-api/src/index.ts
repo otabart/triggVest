@@ -17,7 +17,7 @@ import {
   SupportedChainId, 
   createSmartAccountService,
   isGaslessSupported
-} from '../../../lib/smart-account-service';
+} from './lib/smart-account-service';
 import { parseUnits } from 'viem';
 import axios from 'axios';
 
@@ -33,14 +33,10 @@ app.use(express.json());
 // Simulation des exécutions (en attente de l'intégration Circle SDK)
 const executionHistory: Execution[] = [];
 
-// Mapping des noms de chaînes vers les IDs
+// Mapping des noms de chaînes vers les IDs (uniquement Arbitrum et Base pour CCTP)
 const CHAIN_NAME_TO_ID: Record<string, SupportedChainId> = {
-  'Ethereum': SupportedChainId.ETH_SEPOLIA,
   'Arbitrum': SupportedChainId.ARB_SEPOLIA,
   'Base': SupportedChainId.BASE_SEPOLIA,
-  'Avalanche': SupportedChainId.AVAX_FUJI,
-  'Optimism': SupportedChainId.OP_SEPOLIA,
-  'Polygon': SupportedChainId.POLYGON_AMOY,
 };
 
 // Fonction pour récupérer l'attestation Circle
@@ -125,10 +121,10 @@ async function executeBridgeGasless(
     
     // Étape 4: Attendre la confirmation du burn
     const burnReceipt = await sourceSmartAccount.waitForUserOperationReceipt(burnTxHash);
-    console.log(`✅ Burn transaction confirmed: ${burnReceipt.transactionHash}`);
+    console.log(`✅ Burn transaction confirmed: ${burnReceipt.receipt.transactionHash}`);
     
     // Étape 5: Récupérer l'attestation
-    const attestation = await retrieveAttestation(burnReceipt.transactionHash, sourceChainId);
+    const attestation = await retrieveAttestation(burnReceipt.receipt.transactionHash, sourceChainId);
     console.log(`✅ Attestation retrieved`);
     
     // Étape 6: Créer le Smart Account Service pour la chaîne de destination
@@ -141,14 +137,14 @@ async function executeBridgeGasless(
     
     // Étape 8: Attendre la confirmation du mint
     const mintReceipt = await destSmartAccount.waitForUserOperationReceipt(mintTxHash);
-    console.log(`✅ Mint transaction confirmed: ${mintReceipt.transactionHash}`);
+    console.log(`✅ Mint transaction confirmed: ${mintReceipt.receipt.transactionHash}`);
     
     return {
       fromAsset: 'USDC',
       toAsset: 'USDC',
       amount: amount,
       targetChain: destinationChainId.toString(),
-      txHash: mintReceipt.transactionHash
+      txHash: mintReceipt.receipt.transactionHash
     };
     
   } catch (error) {

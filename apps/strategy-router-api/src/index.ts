@@ -10,6 +10,7 @@ import {
   getActiveStrategies,
   getStrategyWallet 
 } from './wallet-manager';
+import { getSupportedChains, getSmartAccountInfo } from './smart-account-manager';
 
 dotenv.config();
 
@@ -204,14 +205,15 @@ async function processEvent(event: TweetEvent): Promise<{
   return { matches: matchedStrategies, jobResults, userDetails };
 }
 
-// Route pour créer une stratégie avec 2 triggers max et wallet intégré
+// Route pour créer une stratégie avec 2 triggers max, wallet intégré et smart account optionnel
 app.post('/api/create-strategy', async (req: express.Request, res: express.Response) => {
   try {
     const { 
       userWalletAddress, 
       strategyName, 
       triggers,
-      actions
+      actions,
+      smartAccountChain // Optionnel: chaîne pour créer le smart account
     } = req.body;
     
     // Validation des champs requis
@@ -231,12 +233,16 @@ app.post('/api/create-strategy', async (req: express.Request, res: express.Respo
     }
     
     console.log(`📝 Création de stratégie avec ${triggers.length} triggers pour ${userWalletAddress}`);
+    if (smartAccountChain) {
+      console.log(`🔐 Smart account sera créé sur: ${smartAccountChain}`);
+    }
     
     const result = await createStrategyWithWallet({
       userWalletAddress,
       strategyName,
       triggers,
-      actions
+      actions,
+      smartAccountChain
     });
     
     if (!result.success) {
@@ -247,6 +253,9 @@ app.post('/api/create-strategy', async (req: express.Request, res: express.Respo
     }
     
     console.log(`✅ Stratégie créée: ${result.strategy?.id} → ${result.strategy?.generatedAddress}`);
+    if (result.strategy?.smartAccount) {
+      console.log(`🔐 Smart account créé: ${result.strategy.smartAccount.address}`);
+    }
     
     res.json({
       success: true,
@@ -327,6 +336,56 @@ app.post('/api/process-event', async (req: express.Request<{}, any, TweetEvent>,
     res.status(500).json({
       success: false,
       error: 'Erreur lors du traitement de l\'événement',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Route pour obtenir les chaînes supportées pour les smart accounts
+app.get('/api/supported-chains', async (req: express.Request, res: express.Response) => {
+  try {
+    const supportedChains = getSupportedChains();
+    
+    res.json({
+      success: true,
+      supportedChains,
+      total: supportedChains.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur lors de la récupération des chaînes supportées:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération des chaînes supportées',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Route pour obtenir les informations d'un smart account
+app.get('/api/smart-account/:strategyId', async (req: express.Request, res: express.Response) => {
+  try {
+    const { strategyId } = req.params;
+    
+    const smartAccountInfo = await getSmartAccountInfo(strategyId);
+    
+    if (!smartAccountInfo) {
+      return res.status(404).json({
+        success: false,
+        error: 'Smart account non trouvé ou non créé pour cette stratégie'
+      });
+    }
+    
+    res.json({
+      success: true,
+      smartAccount: smartAccountInfo
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur lors de la récupération du smart account:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération du smart account',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
